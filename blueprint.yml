@@ -16,26 +16,28 @@ project:
 # quantifai-platform repo — the retrospective that spawned this initiative.
 # ──────────────────────────────────────────────────────────────────
 pilot_profile:
-  slug: "commerce-ai-tool-admin"
-  display_name: "Platform-engineering lead administering AI coding tools at Commerce.com"
-  pain_point: "Cannot answer, per developer across Claude Code + Copilot + Cursor, what AI tooling cost this month, which seats are actually used vs held, and what the spend produced — attribution stops at each provider's own dashboard."
-  monetization_side: "buyer — internal platform-eng/IT (Commerce.com internal-first; commercial only after the pilot proves)"
-  walkthrough_citation: ""          # ← THE KILL-GATE. Must cite a REAL artifact from a named
-                                    # Commerce.com stakeholder (interview notes, a walkthrough of
-                                    # how they answer spend questions today, a screenshot set of
-                                    # their current process). Per the retrospective: no stakeholder
-                                    # artifact → initiative ends at Stage 1 as a documented retire.
-  competitors_in_scope:             # derived FROM this pilot (org admin, cross-provider)
+  slug: "commerce-ai-ops-cfo"      # re-targeted from commerce-ai-tool-admin per ADR-0002
+  display_name: "AI Ops function reporting to the CFO at Commerce.com (via internal champion: Product Architect)"
+  pain_point: "The AI Ops function under the CFO cannot answer what Commerce.com spent on AI tools this month across Claude Code + Copilot + Cursor + ChatGPT without logging into four provider consoles and hand-assembling a spreadsheet — no cross-provider rollup, trend, or budget threshold exists."
+  monetization_side: "buyer — AI Ops under the CFO, Commerce.com internal-first (commercial only after the pilot proves)"
+  walkthrough_citation: "research/sources/stakeholder-interview-2026-07-03-nino-chavez.md"
+                                    # PROXY artifact: internal-champion interview, not the owner's
+                                    # walkthrough. The AI Ops owner's direct walkthrough is a
+                                    # Stage 1 validation task and remains the kill-gate (ADR-0002).
+  competitors_in_scope:             # derived from this pilot (CFO-side owner, cross-provider)
     - "Anthropic Console + Claude Code Analytics API (provider-native)"
     - "Cursor Organizations dashboard (provider-native)"
     - "GitHub Copilot metrics dashboard + Metrics API (provider-native)"
+    - "ChatGPT Enterprise / OpenAI usage dashboards (provider-native)"
     - "Larridin (Token Spend & Insights)"
     - "Torii AI Management Platform"
     - "Olakai"
+    - "Cloud FinOps suites with AI add-ons (Finout-class) — in scope per ADR-0002"
   out_of_scope_pilots:
     - "Solo developer tracking own spend (quantifai-lite's old audience)"
-    - "Finance/FinOps chargeback buyer (Finout/CloudZero/Vantage territory)"
+    - "General cloud-infra FinOps buyer (narrowed from ADR-0001 wording per ADR-0002)"
     - "Engineering-productivity ROI buyer (Faros/Jellyfish/DX territory)"
+    - "Platform-eng seat administrator (ADR-0001's original pilot — superseded by ADR-0002)"
 
 # Pipeline shape — see Blueprint docs/variant-selection.md (methodology source)
 variant: greenfield
