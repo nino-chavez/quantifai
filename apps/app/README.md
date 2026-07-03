@@ -113,6 +113,28 @@ npm run db:migrate:remote    # applies migrations/*.sql to the hosted D1 databas
 wrangler secret put INGEST_API_KEY_HASH   # SHA-256 hex of the ingest Bearer key
 ```
 
+Canonical hostname is **app.quantifai.app** (custom domain on the
+`quantifai-app` Worker, `quantifai.app` zone). `quantifai-app.biq.workers.dev`
+stays live as a fallback — both hostnames route to the same Worker and carry
+identical Cloudflare Access coverage (see below), so either works; switch
+`QUANTIFAI_API_URL` to the custom domain when convenient (see
+`.env.example`).
+
+Both hostnames sit behind Cloudflare Access (Zero Trust org
+`quantifai-next.cloudflareaccess.com`, OTP IdP for the operator email), with
+two Access applications extended to cover both domains:
+- **`quantifai-app — ledger`** — allow policy (operator email + service
+  token) covering the app root on both `app.quantifai.app` and
+  `*.biq.workers.dev`.
+- **`quantifai-app — ingest/health (bypass)`** — bypass policy covering
+  `/api/v1/*` on both hostnames (the ingest endpoint is Bearer-key gated
+  in-app, not by Access).
+
+Adding a hostname to the Worker without first extending both Access
+applications would serve the ledger unauthenticated — always confirm Access
+coverage for a new hostname before attaching it as a custom domain in
+`wrangler.jsonc`.
+
 ## Test
 
 ```sh

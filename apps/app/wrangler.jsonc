@@ -7,6 +7,17 @@
 	// see https://svelte.dev/docs/kit/adapter-cloudflare.
 	"compatibility_date": "2026-07-03",
 	"compatibility_flags": ["nodejs_als"],
+	// Custom domain (Access coverage confirmed on both apps before this was
+	// added — see the initiative's final report). workers_dev stays explicit
+	// `true` so the workers.dev hostname keeps working alongside it — adding
+	// `routes` disables workers.dev by default unless this is set.
+	"workers_dev": true,
+	"routes": [
+		{
+			"pattern": "app.quantifai.app",
+			"custom_domain": true
+		}
+	],
 	"assets": {
 		"binding": "ASSETS",
 		"directory": ".svelte-kit/cloudflare"
