@@ -16,16 +16,19 @@ export interface GitEventInput {
 	unitId: string | null;
 	sessionId: string | null;
 	linkMethod: 'time_window' | 'git_notes';
+	/** Practice-numbers slice: classified at import time from `%P` parent-hash count (see src/lib/importers/git-log.ts) — 2+ parents = merge commit. */
+	isMerge: boolean;
 }
 
 export async function upsertGitEvent(db: D1Database, input: GitEventInput): Promise<void> {
 	await db
 		.prepare(
-			`INSERT INTO git_events (id, repo, commit_sha, authored_at, message, unit_id, session_id, link_method)
-			 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+			`INSERT INTO git_events (id, repo, commit_sha, authored_at, message, unit_id, session_id, link_method, is_merge)
+			 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
 			 ON CONFLICT (repo, commit_sha) DO UPDATE SET
 			   unit_id = excluded.unit_id,
-			   session_id = excluded.session_id`
+			   session_id = excluded.session_id,
+			   is_merge = excluded.is_merge`
 		)
 		.bind(
 			crypto.randomUUID(),
@@ -35,9 +38,40 @@ export async function upsertGitEvent(db: D1Database, input: GitEventInput): Prom
 			input.message,
 			input.unitId,
 			input.sessionId,
-			input.linkMethod
+			input.linkMethod,
+			input.isMerge ? 1 : 0
 		)
 		.run();
+}
+
+/**
+ * Commit/merge counts grouped by unit, optionally restricted to commits
+ * authored on/after `sinceIso` (practice-numbers window filter). Unit-less
+ * commits (a repo scanned before any Claude Code session existed for it)
+ * group under a null key — practice-level totals still need them; per-unit
+ * rollups don't have a row to attach them to (same rule the ledger already
+ * follows for unit-less sessions).
+ */
+export interface CommitStats {
+	unit_id: string | null;
+	commit_count: number;
+	merge_count: number;
+}
+
+export async function commitStatsByUnit(db: D1Database, sinceIso: string | null): Promise<CommitStats[]> {
+	const { results } = await db
+		.prepare(
+			`SELECT
+				unit_id,
+				COUNT(*) AS commit_count,
+				COALESCE(SUM(is_merge), 0) AS merge_count
+			 FROM git_events
+			 WHERE (?1 IS NULL OR authored_at >= ?1)
+			 GROUP BY unit_id`
+		)
+		.bind(sinceIso)
+		.all<CommitStats>();
+	return results;
 }
 
 /** Sessions with known start/end windows for one project — the join input for time-window matching (src/lib/importers/git-log.ts findSessionForCommit). */

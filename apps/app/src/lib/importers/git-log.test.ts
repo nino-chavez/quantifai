@@ -4,20 +4,21 @@ import { parseGitLog, findSessionForCommit, GIT_LOG_FORMAT, type SessionWindow }
 describe('GIT_LOG_FORMAT / parseGitLog', () => {
 	it('parses a well-formed multi-commit log', () => {
 		const output = [
-			'abc123\x1f2026-07-03T10:00:00-05:00\x1ffeat: add ledger page',
-			'def456\x1f2026-07-03T11:00:00-05:00\x1ffix: chunk at 500'
+			'abc123\x1f2026-07-03T10:00:00-05:00\x1fparent1\x1ffeat: add ledger page',
+			'def456\x1f2026-07-03T11:00:00-05:00\x1fparent2\x1ffix: chunk at 500'
 		].join('\x1e');
 		const commits = parseGitLog(output);
 		expect(commits).toHaveLength(2);
 		expect(commits[0]).toEqual({
 			sha: 'abc123',
 			authoredAt: '2026-07-03T10:00:00-05:00',
-			message: 'feat: add ledger page'
+			message: 'feat: add ledger page',
+			isMerge: false
 		});
 	});
 
 	it('preserves pipe characters and colons in the commit message (record/field separators avoid them)', () => {
-		const output = 'abc\x1f2026-07-03T10:00:00Z\x1ffix: a|b ratio, see 10:30am note\x1e';
+		const output = 'abc\x1f2026-07-03T10:00:00Z\x1fparent1\x1ffix: a|b ratio, see 10:30am note\x1e';
 		const commits = parseGitLog(output);
 		expect(commits[0].message).toBe('fix: a|b ratio, see 10:30am note');
 	});
@@ -27,7 +28,7 @@ describe('GIT_LOG_FORMAT / parseGitLog', () => {
 	});
 
 	it('skips a record missing sha or timestamp', () => {
-		const output = '\x1f\x1fbroken\x1e' + 'abc\x1f2026-07-03T10:00:00Z\x1fgood\x1e';
+		const output = '\x1f\x1f\x1fbroken\x1e' + 'abc\x1f2026-07-03T10:00:00Z\x1fparent1\x1fgood\x1e';
 		const commits = parseGitLog(output);
 		expect(commits).toHaveLength(1);
 		expect(commits[0].message).toBe('good');
@@ -36,8 +37,31 @@ describe('GIT_LOG_FORMAT / parseGitLog', () => {
 	it('exports a format string using the record/unit separators, not pipes', () => {
 		expect(GIT_LOG_FORMAT).toContain('%H');
 		expect(GIT_LOG_FORMAT).toContain('%aI');
+		expect(GIT_LOG_FORMAT).toContain('%P');
 		expect(GIT_LOG_FORMAT).toContain('%s');
 		expect(GIT_LOG_FORMAT).not.toContain('|');
+	});
+
+	describe('merge-commit classification (via %P parent-hash count)', () => {
+		it('classifies a commit with one parent as not a merge', () => {
+			const output = 'abc\x1f2026-07-03T10:00:00Z\x1fparent1\x1fregular commit\x1e';
+			expect(parseGitLog(output)[0].isMerge).toBe(false);
+		});
+
+		it('classifies a commit with two parents as a merge', () => {
+			const output = 'abc\x1f2026-07-03T10:00:00Z\x1fparent1 parent2\x1fMerge branch feature\x1e';
+			expect(parseGitLog(output)[0].isMerge).toBe(true);
+		});
+
+		it('classifies a root commit with zero parents as not a merge', () => {
+			const output = 'abc\x1f2026-07-03T10:00:00Z\x1f\x1finitial commit\x1e';
+			expect(parseGitLog(output)[0].isMerge).toBe(false);
+		});
+
+		it('does not rely on commit-message conventions — a squash-merge with one parent is not classified as a merge', () => {
+			const output = 'abc\x1f2026-07-03T10:00:00Z\x1fparent1\x1fMerge pull request #42 (squashed)\x1e';
+			expect(parseGitLog(output)[0].isMerge).toBe(false);
+		});
 	});
 });
 
