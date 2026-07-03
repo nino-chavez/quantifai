@@ -3,6 +3,7 @@ import {
 	formatUsd,
 	provenanceMixLabel,
 	formatCommitCount,
+	formatCommitCell,
 	formatSessionCount,
 	dominantProvenance,
 	amortizedCoverageLabel
@@ -75,6 +76,29 @@ describe('formatCommitCount', () => {
 		expect(formatCommitCount(0)).toBe('no commits linked');
 		expect(formatCommitCount(1)).toBe('1 commit');
 		expect(formatCommitCount(8)).toBe('8 commits');
+	});
+
+	it('omits the deterministic suffix when zero (pre-hook history reads exactly as before)', () => {
+		expect(formatCommitCount(8, 0)).toBe('8 commits');
+	});
+
+	it('appends the deterministic (git-notes) count when present', () => {
+		expect(formatCommitCount(8, 3)).toBe('8 commits (3 deterministic)');
+	});
+});
+
+describe('formatCommitCell', () => {
+	it('renders a bare number with no deterministic commits', () => {
+		expect(formatCommitCell(8)).toBe('8');
+		expect(formatCommitCell(8, 0)).toBe('8');
+	});
+
+	it('appends the deterministic count in parentheses when present', () => {
+		expect(formatCommitCell(8, 2)).toBe('8 (2 deterministic)');
+	});
+
+	it('renders "0" for zero commits, distinct from formatCommitCount\'s prose', () => {
+		expect(formatCommitCell(0)).toBe('0');
 	});
 });
 

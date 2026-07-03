@@ -30,6 +30,7 @@ function unit(overrides: Partial<UnitOfWorkRow> = {}): UnitOfWorkRow {
 		estimated_cost: 13.24,
 		subscription_cost: 0,
 		commit_count: 8,
+		deterministic_commit_count: 0,
 		first_session_at: '2026-07-03T10:00:00Z',
 		last_session_at: '2026-07-03T18:00:00Z',
 		amortized_cost: 0,
@@ -47,6 +48,7 @@ const EMPTY: LedgerData = {
 		estimated_cost: 0,
 		subscription_cost: 0,
 		total_commits: 0,
+		deterministic_commits: 0,
 		amortized_cost: 0,
 		amortization_configured: false,
 		amortized_covered_sessions: 0,
@@ -66,6 +68,7 @@ const WITH_DATA: LedgerData = {
 		estimated_cost: 13.24,
 		subscription_cost: 0,
 		total_commits: 8,
+		deterministic_commits: 0,
 		amortized_cost: 0,
 		amortization_configured: false,
 		amortized_covered_sessions: 0,
@@ -85,6 +88,7 @@ const WITH_AMORTIZATION: LedgerData = {
 		estimated_cost: 13.24,
 		subscription_cost: 0,
 		total_commits: 8,
+		deterministic_commits: 0,
 		amortized_cost: 8.1,
 		amortization_configured: true,
 		amortized_covered_sessions: 3,
@@ -110,6 +114,7 @@ const WITH_ACTUAL_SPEND: LedgerData = {
 		estimated_cost: 13.24,
 		subscription_cost: 0,
 		total_commits: 8,
+		deterministic_commits: 0,
 		amortized_cost: 8.1,
 		amortization_configured: true,
 		amortized_covered_sessions: 3,
@@ -167,6 +172,24 @@ describe('LedgerView — populated state', () => {
 	it('renders a provenance badge for a 100%-estimated unit', () => {
 		const { container } = render(LedgerView, { data: WITH_DATA });
 		expect(container.querySelector('.provenance-badge--estimated')).toBeTruthy();
+	});
+});
+
+describe('LedgerView — linkage quality (ADR-0004: git-notes deterministic vs. time-window)', () => {
+	it('renders a bare commit count in the ledger table when nothing is git-notes-linked yet', () => {
+		const { getByTestId } = render(LedgerView, { data: WITH_DATA });
+		expect(within(getByTestId('ledger-table')).getByText('8')).toBeInTheDocument();
+	});
+
+	it('surfaces the deterministic subset inline once some commits carry a git-note', () => {
+		const withDeterministic: LedgerData = {
+			...WITH_DATA,
+			totals: { ...WITH_DATA.totals, total_commits: 8, deterministic_commits: 3 },
+			units: [unit({ commit_count: 8, deterministic_commit_count: 3 })]
+		};
+		const { getByTestId } = render(LedgerView, { data: withDeterministic });
+		expect(within(getByTestId('hero')).getByText(/3 deterministic/)).toBeInTheDocument();
+		expect(within(getByTestId('ledger-table')).getByText('8 (3 deterministic)')).toBeInTheDocument();
 	});
 });
 

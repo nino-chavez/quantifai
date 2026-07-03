@@ -103,6 +103,7 @@ export async function loadPracticeNumbers(
 				amortized_covered_sessions: amort?.coveredSessions ?? 0,
 				amortized_interactive_sessions: amort?.totalInteractiveSessions ?? 0,
 				commit_count: git?.commit_count ?? 0,
+				deterministic_commit_count: git?.deterministic_commit_count ?? 0,
 				merge_count: git?.merge_count ?? 0
 			};
 		})

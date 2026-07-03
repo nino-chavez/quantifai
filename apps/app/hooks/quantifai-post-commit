@@ -1,0 +1,128 @@
+#!/bin/sh
+# quantifai-post-commit — deterministic commit -> Claude Code session
+# attribution (ADR-0004's future mechanism, the Exceeds Ink git-notes
+# pattern — see research/competitive/solo-market.md). Writes a git note
+# under refs/notes/quantifai for the commit HEAD now points at:
+#
+#   {"session_id":"<uuid>","source":"env"|"heartbeat","ts":<unix-epoch>}
+#
+# Session-id resolution ladder (first hit wins; each rung is its own
+# `source` value in the note):
+#
+#   (a) env — $CLAUDE_SESSION_ID or $CLAUDE_CODE_SESSION_ID. Fires when this
+#       commit runs inside a Claude Code Bash tool call. NOTE (empirically
+#       verified 2026-07-03, `env | grep -i claude` inside a live session):
+#       Claude Code does NOT export a var literally named CLAUDE_SESSION_ID —
+#       it exports CLAUDE_CODE_SESSION_ID. Both are checked (the former first,
+#       in case a future/alternate tool sets the shorter name) so this rung
+#       is future-proof without being wrong today.
+#   (b) heartbeat — <git-common-dir>/.claude-sessions/*.json, written by the
+#       operator's worktree-guard.py hook for every live Claude Code session
+#       on this machine (SessionStart + refreshed on each Bash call). Picks
+#       the freshest lock whose `cwd` equals this commit's worktree top-level
+#       AND whose `branch` equals the current branch; a lock is ignored if
+#       either field mismatches, or if its `ts` is older than 900s (matches
+#       worktree-guard.py's own STALE_SECONDS — an abandoned/crashed session's
+#       lock is not a live signal).
+#   (c) nothing — no note is written. Silence is a deliberate, honest
+#       "no signal," not a guess; the importer's time-window join remains the
+#       fallback for un-noted commits.
+#
+# Contract:
+#   - Fast: no network, a handful of cheap `git`/`test`/`sed` calls.
+#   - Fail-open: the whole body runs under `main`, whose return code is
+#     discarded (`exit 0` always) — a bug here must never block a commit.
+#   - Inert during history rewrites: skips entirely when git's own rebase/
+#     cherry-pick/merge state markers are present (see below) — a replayed
+#     commit is not "written by the session right now," and attributing it
+#     to today's session would be actively wrong, not just imprecise.
+#
+# Installed via ../scripts/install-git-hook.ts — see that file for the
+# install-time chaining behavior (never clobbers a foreign post-commit hook).
+
+main() {
+	git_dir=$(git rev-parse --git-dir 2>/dev/null) || return 0
+	common_dir=$(git rev-parse --git-common-dir 2>/dev/null) || return 0
+
+	# Never fire on a replayed commit (rebase/cherry-pick/in-progress merge).
+	# These are git's own state markers, checked against $git_dir on purpose —
+	# unlike the hooks/ directory (shared via the common dir), rebase/
+	# cherry-pick state IS worktree-scoped: you can be mid-rebase in one
+	# worktree while another linked worktree is clean.
+	#
+	# Corroborating (but not load-bearing) empirical finding, 2026-07-03: git
+	# also sets $GIT_SEQUENCE_EDITOR internally during a plain `git rebase`
+	# replay, not just an interactive one — but that's an internal
+	# implementation detail, not documented API, so the file markers below are
+	# the primary, reliable guard.
+	for marker in rebase-merge rebase-apply CHERRY_PICK_HEAD MERGE_HEAD; do
+		if [ -e "$git_dir/$marker" ]; then
+			return 0
+		fi
+	done
+
+	session_id=""
+	source_label=""
+
+	# --- rung (a): env ---
+	if [ -n "$CLAUDE_SESSION_ID" ]; then
+		session_id="$CLAUDE_SESSION_ID"
+		source_label="env"
+	elif [ -n "$CLAUDE_CODE_SESSION_ID" ]; then
+		session_id="$CLAUDE_CODE_SESSION_ID"
+		source_label="env"
+	fi
+
+	# --- rung (b): heartbeat lock ---
+	if [ -z "$session_id" ]; then
+		lock_dir="$common_dir/.claude-sessions"
+		if [ -d "$lock_dir" ]; then
+			toplevel=$(git rev-parse --show-toplevel 2>/dev/null) || toplevel=""
+			branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null) || branch=""
+			now=$(date +%s)
+			stale_after=900 # 15 minutes — matches worktree-guard.py's STALE_SECONDS
+			best_ts=-1
+
+			for lock in "$lock_dir"/*.json; do
+				[ -f "$lock" ] || continue
+				line=$(cat "$lock" 2>/dev/null) || continue
+
+				lock_sid=$(printf '%s' "$line" | sed -n 's/.*"session_id": *"\([^"]*\)".*/\1/p')
+				lock_cwd=$(printf '%s' "$line" | sed -n 's/.*"cwd": *"\([^"]*\)".*/\1/p')
+				lock_branch=$(printf '%s' "$line" | sed -n 's/.*"branch": *"\([^"]*\)".*/\1/p')
+				lock_ts=$(printf '%s' "$line" | sed -n 's/.*"ts": *\([0-9][0-9]*\).*/\1/p')
+
+				# Malformed/partial lock file (bad JSON, missing field) -> skip
+				# it, never crash the loop over one bad neighbor.
+				[ -n "$lock_sid" ] || continue
+				[ -n "$lock_cwd" ] || continue
+				[ -n "$lock_ts" ] || continue
+
+				[ "$lock_cwd" = "$toplevel" ] || continue
+				[ "$lock_branch" = "$branch" ] || continue
+
+				age=$((now - lock_ts))
+				[ "$age" -ge 0 ] || age=0
+				[ "$age" -le "$stale_after" ] || continue
+
+				if [ "$lock_ts" -gt "$best_ts" ]; then
+					best_ts="$lock_ts"
+					session_id="$lock_sid"
+				fi
+			done
+
+			[ -n "$session_id" ] && source_label="heartbeat"
+		fi
+	fi
+
+	# --- rung (c): nothing resolved -> no note, no guess ---
+	[ -n "$session_id" ] || return 0
+
+	ts=$(date +%s)
+	note="{\"session_id\":\"$session_id\",\"source\":\"$source_label\",\"ts\":$ts}"
+	git notes --ref=quantifai add -f -m "$note" HEAD >/dev/null 2>&1
+	return 0
+}
+
+main
+exit 0

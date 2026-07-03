@@ -27,6 +27,8 @@ export interface LedgerTotals {
 	estimated_cost: number;
 	subscription_cost: number;
 	total_commits: number;
+	/** git_events with link_method='git_notes' (ADR-0004) — deterministic commit->session linkage vs. the time-window fallback for the rest of total_commits. */
+	deterministic_commits: number;
 	/** Subscription-amortized total (DESIGN.md rule 1's honest second number) — sum of covered amortized cost across all interactive sessions, all time. Never summed with total_cost/estimated_cost. */
 	amortized_cost: number;
 	/** True when at least one subscription_plans row exists — gates the empty state independent of whether any given month happened to be covered. */
@@ -73,6 +75,8 @@ export interface UnitOfWorkRow {
 	estimated_cost: number;
 	subscription_cost: number;
 	commit_count: number;
+	/** git_events with link_method='git_notes' for this unit — the deterministic subset of commit_count. */
+	deterministic_commit_count: number;
 	first_session_at: string | null;
 	last_session_at: string | null;
 	amortized_cost: number;
@@ -94,6 +98,7 @@ const EMPTY_TOTALS: LedgerTotals = {
 	estimated_cost: 0,
 	subscription_cost: 0,
 	total_commits: 0,
+	deterministic_commits: 0,
 	amortized_cost: 0,
 	amortization_configured: false,
 	amortized_covered_sessions: 0,
@@ -133,8 +138,13 @@ async function getLedgerTotals(db: D1Database): Promise<BaseTotals> {
 		.first<Omit<BaseTotals, 'total_commits'>>();
 
 	const commitsRow = await db
-		.prepare(`SELECT COUNT(*) AS total_commits FROM git_events`)
-		.first<{ total_commits: number }>();
+		.prepare(
+			`SELECT
+				COUNT(*) AS total_commits,
+				COALESCE(SUM(CASE WHEN link_method = 'git_notes' THEN 1 ELSE 0 END), 0) AS deterministic_commits
+			 FROM git_events`
+		)
+		.first<{ total_commits: number; deterministic_commits: number }>();
 
 	return {
 		...(totalsRow ?? {
@@ -144,7 +154,8 @@ async function getLedgerTotals(db: D1Database): Promise<BaseTotals> {
 			estimated_cost: 0,
 			subscription_cost: 0
 		}),
-		total_commits: commitsRow?.total_commits ?? 0
+		total_commits: commitsRow?.total_commits ?? 0,
+		deterministic_commits: commitsRow?.deterministic_commits ?? 0
 	};
 }
 
@@ -162,6 +173,7 @@ async function getUnitOfWorkLedger(db: D1Database): Promise<BaseUnitRow[]> {
 				COALESCE(SUM(CASE WHEN s.cost_provenance = 'estimated' THEN s.total_cost ELSE 0 END), 0) AS estimated_cost,
 				COALESCE(SUM(CASE WHEN s.cost_provenance = 'subscription_amortized' THEN s.total_cost ELSE 0 END), 0) AS subscription_cost,
 				(SELECT COUNT(*) FROM git_events g WHERE g.unit_id = u.id) AS commit_count,
+				(SELECT COUNT(*) FROM git_events g WHERE g.unit_id = u.id AND g.link_method = 'git_notes') AS deterministic_commit_count,
 				MIN(s.started_at) AS first_session_at,
 				MAX(s.ended_at) AS last_session_at
 			 FROM units_of_work u

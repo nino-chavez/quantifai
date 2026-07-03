@@ -33,6 +33,8 @@ export interface ProjectRow {
 	amortized_covered_sessions: number;
 	amortized_interactive_sessions: number;
 	commit_count: number;
+	/** git_events with link_method='git_notes' (ADR-0004) — the deterministic subset of commit_count for this unit/window. */
+	deterministic_commit_count: number;
 	merge_count: number;
 }
 
@@ -61,7 +63,8 @@ export interface PracticeNumbersData {
 }
 
 export const METHODOLOGY = {
-	commits: 'git_events count (authored_at in window) across all configured repos, divided by weeks in the window.',
+	commits:
+		'git_events count (authored_at in window) across all configured repos, divided by weeks in the window. A commit is "deterministic" when a local git-notes record (refs/notes/quantifai, written at commit time by the quantifai-post-commit hook) pins its session; otherwise it falls back to the time-window join (a session whose start/end covers the commit\'s timestamp).',
 	merges: 'git_events with 2+ parents (classified from `git log --pretty=%P` at import time), divided by weeks in the window.',
 	sessions: 'sessions with started_at in window, divided by weeks in the window.',
 	estimatedCostPerWeek:
