@@ -154,6 +154,11 @@ export async function insertMessages(db: D1Database, rows: MessageRow[]): Promis
 			row.recordType
 		)
 	);
-	await db.batch(batch);
-	return rows.length;
+	const results = await db.batch(batch);
+	// `ON CONFLICT DO NOTHING` means a re-import of already-seen messages
+	// writes zero rows — sum each statement's actual `meta.changes` rather
+	// than returning `rows.length` unconditionally, or a routine idempotent
+	// re-run would misreport every already-ingested message as newly
+	// "accepted".
+	return results.reduce((sum, r) => sum + (r.meta?.changes ?? 0), 0);
 }

@@ -64,6 +64,7 @@ const PROJECTS_DIR = resolve(argValue('--dir') ?? join(homedir(), '.claude', 'pr
 const LIMIT_FILES = argValue('--limit') ? Number(argValue('--limit')) : undefined;
 
 const MESSAGE_POST_CHUNK = 4000; // stays comfortably under the server's 10k MAX_BATCH_SIZE
+const SESSION_POST_CHUNK = 4000; // sent in its own pass, never combined with a message chunk — see writeRemote
 
 function walkJsonlFiles(dir: string): string[] {
 	const out: string[] = [];
@@ -367,22 +368,32 @@ async function writeRemote(
 	api: { apiUrl: string; apiKey: string }
 ) {
 	const unitsOfWork = Array.from(units.values());
-	const messageChunks = chunk(messages, MESSAGE_POST_CHUNK);
 
-	if (messageChunks.length === 0) {
-		await postIngestBatch({ unitsOfWork, sessions, messages: [] }, api);
-		return;
+	// Units + sessions are chunked in their OWN pass, independent of
+	// messages — a prior version co-sent the *entire* sessions array
+	// alongside the first message chunk, and the server's batch-size cap
+	// counts messages + sessions + gitEvents together
+	// (src/lib/server/ingest.ts assertBatchSize). A heavy user with
+	// thousands of sessions could push that first combined chunk over
+	// MAX_BATCH_SIZE and abort the whole import. Sessions and messages are
+	// independent arrays server-side (processIngestBatch handles them in
+	// separate passes), so there's no correctness reason to co-send them.
+	if (unitsOfWork.length > 0 || sessions.length > 0) {
+		for (const sessionChunk of chunk(sessions, SESSION_POST_CHUNK)) {
+			const result = await postIngestBatch({ unitsOfWork, sessions: sessionChunk }, api);
+			console.log(`  POST units+sessions chunk:`, JSON.stringify(result));
+		}
+		if (sessions.length === 0) {
+			// no sessions at all, but units still need to land
+			const result = await postIngestBatch({ unitsOfWork }, api);
+			console.log(`  POST units chunk:`, JSON.stringify(result));
+		}
 	}
 
+	const messageChunks = chunk(messages, MESSAGE_POST_CHUNK);
 	for (let i = 0; i < messageChunks.length; i += 1) {
-		// units + sessions are cheap to resend (idempotent upserts) — only
-		// send them on the first chunk to avoid redundant work on the server.
-		const batch =
-			i === 0
-				? { unitsOfWork, sessions, messages: messageChunks[i] }
-				: { messages: messageChunks[i] };
-		const result = await postIngestBatch(batch, api);
-		console.log(`  POST chunk ${i + 1}/${messageChunks.length}:`, JSON.stringify(result));
+		const result = await postIngestBatch({ messages: messageChunks[i] }, api);
+		console.log(`  POST messages chunk ${i + 1}/${messageChunks.length}:`, JSON.stringify(result));
 	}
 }
 
