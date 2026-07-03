@@ -16,6 +16,9 @@
 import type { D1Database } from '@cloudflare/workers-types';
 import { computeAmortizationRollup } from './amortization-query';
 import { listSubscriptionPlans } from './subscription-plans';
+import { providerCostTotals, providerCostGrandTotal, type ProviderCostTotal } from './provider-costs';
+import { allSyncStates, type ProviderSyncStateRow, type SyncStatus } from './provider-sync-state';
+import { ALL_PROVIDERS } from '$lib/providers/registry';
 
 export interface LedgerTotals {
 	total_sessions: number;
@@ -32,6 +35,31 @@ export interface LedgerTotals {
 	amortized_covered_sessions: number;
 	/** All interactive sessions considered for amortization (covered + uncovered). */
 	amortized_interactive_sessions: number;
+	/**
+	 * All-time sum of `provider_costs.amount_usd` (slice 3) — REAL spend from
+	 * provider cost APIs, daily-aggregate grain, never attributed to a unit
+	 * of work (see `providerBuckets` on LedgerData). Money semantics: this
+	 * MAY sum with `amortized_cost` into `actual_spend`; it must NEVER sum
+	 * with `total_cost`/`estimated_cost` (those are API-equivalent *value*,
+	 * not spend).
+	 */
+	provider_metered_cost: number;
+	/**
+	 * `amortized_cost` (when configured) + `provider_metered_cost` — "what
+	 * the operator actually paid," the second REAL-spend family alongside
+	 * `estimated`. When amortization is unconfigured this is the
+	 * API-metered portion only, not a complete actual-spend figure — callers
+	 * must pair it with `amortization_configured` to render that honestly
+	 * (never silently treat "unconfigured" as "$0 subscription spend").
+	 */
+	actual_spend: number;
+}
+
+export interface ProviderBucketRow extends ProviderCostTotal {
+	kind: 'provider-bucket';
+	last_sync_status: SyncStatus;
+	last_sync_at: string | null;
+	last_sync_error: string | null;
 }
 
 export interface UnitOfWorkRow {
@@ -55,6 +83,8 @@ export interface UnitOfWorkRow {
 export interface LedgerData {
 	totals: LedgerTotals;
 	units: UnitOfWorkRow[];
+	/** API-metered spend, one row per known provider (connected or not — DESIGN.md rule 7), never folded into `units`. */
+	providerBuckets: ProviderBucketRow[];
 }
 
 const EMPTY_TOTALS: LedgerTotals = {
@@ -67,7 +97,9 @@ const EMPTY_TOTALS: LedgerTotals = {
 	amortized_cost: 0,
 	amortization_configured: false,
 	amortized_covered_sessions: 0,
-	amortized_interactive_sessions: 0
+	amortized_interactive_sessions: 0,
+	provider_metered_cost: 0,
+	actual_spend: 0
 };
 
 const PROVENANCE_SUM = (col: string, provenance: string) =>
@@ -75,7 +107,12 @@ const PROVENANCE_SUM = (col: string, provenance: string) =>
 
 type BaseTotals = Omit<
 	LedgerTotals,
-	'amortized_cost' | 'amortization_configured' | 'amortized_covered_sessions' | 'amortized_interactive_sessions'
+	| 'amortized_cost'
+	| 'amortization_configured'
+	| 'amortized_covered_sessions'
+	| 'amortized_interactive_sessions'
+	| 'provider_metered_cost'
+	| 'actual_spend'
 >;
 type BaseUnitRow = Omit<
 	UnitOfWorkRow,
@@ -136,11 +173,42 @@ async function getUnitOfWorkLedger(db: D1Database): Promise<BaseUnitRow[]> {
 	return results;
 }
 
+/**
+ * One row per known provider (DESIGN.md rule 7: "not connected" renders
+ * honestly, never as an absent/empty chart) — `ALL_PROVIDERS` is the
+ * canonical list, left-joined against whatever `provider_costs`/
+ * `provider_sync_state` rows exist so a provider with zero syncs still
+ * shows up as "not connected" or "never run" instead of disappearing.
+ */
+async function loadProviderBuckets(db: D1Database): Promise<ProviderBucketRow[]> {
+	const [totals, states] = await Promise.all([providerCostTotals(db), allSyncStates(db)]);
+	const totalsByProvider = new Map(totals.map((t) => [t.provider, t]));
+	const stateByProvider = new Map(states.map((s) => [s.provider, s]));
+
+	return ALL_PROVIDERS.map((provider): ProviderBucketRow => {
+		const total = totalsByProvider.get(provider.name);
+		const state: ProviderSyncStateRow | undefined = stateByProvider.get(provider.name);
+		return {
+			provider: provider.name,
+			total_amount_usd: total?.total_amount_usd ?? 0,
+			days_covered: total?.days_covered ?? 0,
+			earliest_date: total?.earliest_date ?? null,
+			latest_date: total?.latest_date ?? null,
+			kind: 'provider-bucket',
+			last_sync_status: state?.last_sync_status ?? 'never_run',
+			last_sync_at: state?.last_sync_at ?? null,
+			last_sync_error: state?.last_sync_error ?? null
+		};
+	});
+}
+
 export async function loadLedgerData(db: D1Database): Promise<LedgerData> {
-	const [baseTotals, baseUnits, plans] = await Promise.all([
+	const [baseTotals, baseUnits, plans, providerMeteredCost, providerBuckets] = await Promise.all([
 		getLedgerTotals(db),
 		getUnitOfWorkLedger(db),
-		listSubscriptionPlans(db)
+		listSubscriptionPlans(db),
+		providerCostGrandTotal(db),
+		loadProviderBuckets(db)
 	]);
 
 	// All-time rollup (sinceIso: null) — the ledger prices the whole practice,
@@ -153,7 +221,12 @@ export async function loadLedgerData(db: D1Database): Promise<LedgerData> {
 		amortized_cost: rollup.totals.amortizedCostUsd,
 		amortization_configured: amortizationConfigured,
 		amortized_covered_sessions: rollup.totals.coveredSessions,
-		amortized_interactive_sessions: rollup.totals.totalInteractiveSessions
+		amortized_interactive_sessions: rollup.totals.totalInteractiveSessions,
+		provider_metered_cost: providerMeteredCost,
+		// Money semantics (extends DP-1): amortized + api_metered are both
+		// REAL spend and MAY sum; `estimated` never joins this sum (see
+		// LedgerTotals.actual_spend doc comment).
+		actual_spend: (amortizationConfigured ? rollup.totals.amortizedCostUsd : 0) + providerMeteredCost
 	};
 
 	const units: UnitOfWorkRow[] = baseUnits.map((unit) => {
@@ -166,5 +239,5 @@ export async function loadLedgerData(db: D1Database): Promise<LedgerData> {
 		};
 	});
 
-	return { totals, units };
+	return { totals, units, providerBuckets };
 }

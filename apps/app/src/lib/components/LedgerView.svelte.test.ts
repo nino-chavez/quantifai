@@ -1,7 +1,22 @@
 import { describe, it, expect } from 'vitest';
 import { render, within } from '@testing-library/svelte';
 import LedgerView from './LedgerView.svelte';
-import type { LedgerData, UnitOfWorkRow } from '$lib/server/ledger';
+import type { LedgerData, ProviderBucketRow, UnitOfWorkRow } from '$lib/server/ledger';
+
+function providerBucket(overrides: Partial<ProviderBucketRow> = {}): ProviderBucketRow {
+	return {
+		kind: 'provider-bucket',
+		provider: 'anthropic',
+		total_amount_usd: 0,
+		days_covered: 0,
+		earliest_date: null,
+		latest_date: null,
+		last_sync_status: 'not_connected',
+		last_sync_at: null,
+		last_sync_error: null,
+		...overrides
+	};
+}
 
 function unit(overrides: Partial<UnitOfWorkRow> = {}): UnitOfWorkRow {
 	return {
@@ -35,9 +50,12 @@ const EMPTY: LedgerData = {
 		amortized_cost: 0,
 		amortization_configured: false,
 		amortized_covered_sessions: 0,
-		amortized_interactive_sessions: 0
+		amortized_interactive_sessions: 0,
+		provider_metered_cost: 0,
+		actual_spend: 0
 	},
-	units: []
+	units: [],
+	providerBuckets: [providerBucket(), providerBucket({ provider: 'openai' }), providerBucket({ provider: 'openrouter' })]
 };
 
 const WITH_DATA: LedgerData = {
@@ -51,9 +69,12 @@ const WITH_DATA: LedgerData = {
 		amortized_cost: 0,
 		amortization_configured: false,
 		amortized_covered_sessions: 0,
-		amortized_interactive_sessions: 0
+		amortized_interactive_sessions: 0,
+		provider_metered_cost: 0,
+		actual_spend: 0
 	},
-	units: [unit()]
+	units: [unit()],
+	providerBuckets: [providerBucket()]
 };
 
 const WITH_AMORTIZATION: LedgerData = {
@@ -67,7 +88,9 @@ const WITH_AMORTIZATION: LedgerData = {
 		amortized_cost: 8.1,
 		amortization_configured: true,
 		amortized_covered_sessions: 3,
-		amortized_interactive_sessions: 3
+		amortized_interactive_sessions: 3,
+		provider_metered_cost: 0,
+		actual_spend: 8.1
 	},
 	units: [
 		unit({
@@ -75,6 +98,40 @@ const WITH_AMORTIZATION: LedgerData = {
 			amortized_covered_sessions: 3,
 			amortized_interactive_sessions: 3
 		})
+	],
+	providerBuckets: [providerBucket()]
+};
+
+const WITH_ACTUAL_SPEND: LedgerData = {
+	totals: {
+		total_sessions: 3,
+		total_cost: 13.24,
+		metered_cost: 0,
+		estimated_cost: 13.24,
+		subscription_cost: 0,
+		total_commits: 8,
+		amortized_cost: 8.1,
+		amortization_configured: true,
+		amortized_covered_sessions: 3,
+		amortized_interactive_sessions: 3,
+		provider_metered_cost: 5.5,
+		actual_spend: 13.6
+	},
+	units: [
+		unit({
+			amortized_cost: 8.1,
+			amortized_covered_sessions: 3,
+			amortized_interactive_sessions: 3
+		})
+	],
+	providerBuckets: [
+		providerBucket({
+			total_amount_usd: 5.5,
+			days_covered: 12,
+			last_sync_status: 'ok',
+			last_sync_at: '2026-07-03T06:00:00Z'
+		}),
+		providerBucket({ provider: 'openai', last_sync_status: 'not_connected' })
 	]
 };
 
@@ -132,5 +189,62 @@ describe('LedgerView — amortization provenance (DESIGN.md rule 1: the honest s
 		const { container } = render(LedgerView, { data: WITH_AMORTIZATION });
 		expect(container.querySelector('.provenance-badge--subscription_amortized')).toBeTruthy();
 		expect(container.querySelector('.provenance-badge--estimated')).toBeTruthy();
+	});
+});
+
+describe('LedgerView — actual spend (money semantics: amortized + api_metered compose, estimated never joins)', () => {
+	it('renders amortized + api_metered composed into actual spend, distinct from (never equal to) estimated', () => {
+		const { getByTestId } = render(LedgerView, { data: WITH_ACTUAL_SPEND });
+		const actualSpend = getByTestId('hero-actual-spend');
+		// 8.1 (amortized) + 5.5 (api metered) = 13.6 — the correct composed figure.
+		expect(within(actualSpend).getByText('$13.60')).toBeInTheDocument();
+	});
+
+	it('never renders estimated + actual_spend summed together anywhere on the page', () => {
+		const { container } = render(LedgerView, { data: WITH_ACTUAL_SPEND });
+		// 13.24 (estimated) + 13.6 (actual spend) = 26.84 would be the wrong, cross-family sum.
+		expect(container.textContent).not.toContain('26.84');
+	});
+
+	it('uses a distinct composite badge, not one of the three single-provenance badges, for actual spend', () => {
+		const { getByTestId } = render(LedgerView, { data: WITH_ACTUAL_SPEND });
+		expect(getByTestId('hero-actual-spend').querySelector('.provenance-badge--actual_spend')).toBeTruthy();
+	});
+});
+
+describe('LedgerView — provider buckets (DESIGN.md rule 7: unconnected renders honestly, never as an error)', () => {
+	it('renders a "not connected" state for a provider with no secret, never an error or empty chart', () => {
+		const { getByTestId } = render(LedgerView, { data: WITH_ACTUAL_SPEND });
+		expect(getByTestId('not-connected-openai')).toHaveTextContent(/not connected/i);
+	});
+
+	it('renders the connected provider bucket amount and day coverage, never folded into a unit-of-work row', () => {
+		const { getByTestId } = render(LedgerView, { data: WITH_ACTUAL_SPEND });
+		const bucket = getByTestId('provider-bucket-anthropic');
+		expect(within(bucket).getByText('$5.50')).toBeInTheDocument();
+		expect(within(bucket).getByText(/12 days/)).toBeInTheDocument();
+	});
+
+	it('surfaces last_sync_error when a provider sync failed (DESIGN.md connections-panel organism: error is user-visible)', () => {
+		const withError: LedgerData = {
+			...WITH_ACTUAL_SPEND,
+			providerBuckets: [
+				providerBucket({ last_sync_status: 'error', last_sync_error: 'Anthropic cost_report 500: internal error' })
+			]
+		};
+		const { getByTestId } = render(LedgerView, { data: withError });
+		expect(getByTestId('sync-error-anthropic')).toHaveTextContent('Anthropic cost_report 500');
+	});
+
+	it('renders the provider-buckets section even when no sessions have been imported yet (independent of unit-of-work data)', () => {
+		const providerOnlyEmpty: LedgerData = { ...EMPTY, providerBuckets: WITH_ACTUAL_SPEND.providerBuckets };
+		const { getByTestId } = render(LedgerView, { data: providerOnlyEmpty });
+		expect(getByTestId('empty-state')).toBeInTheDocument(); // still an empty ledger (no units)
+		expect(getByTestId('provider-bucket-anthropic')).toBeInTheDocument(); // but provider data still shows
+	});
+
+	it('adds no additional data-primary-cta from the provider-buckets section (read-only, DESIGN.md one-primary-CTA rule)', () => {
+		const { container } = render(LedgerView, { data: WITH_ACTUAL_SPEND });
+		expect(container.querySelectorAll('[data-primary-cta]')).toHaveLength(0);
 	});
 });

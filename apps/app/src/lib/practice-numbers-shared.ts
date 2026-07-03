@@ -44,6 +44,10 @@ export interface PracticeRates {
 	estimated_cost_per_week: number;
 	/** null when amortization is unconfigured — never a guessed figure. */
 	amortized_cost_per_week: number | null;
+	/** sum(provider_costs.amount_usd) for dates in window / weeks — REAL spend, daily-aggregate grain (slice 3). Always a number (0 when no provider is connected/synced yet), never null — unlike amortized_cost_per_week, "no provider data yet" and "$0 metered" are the same observable state, so there's no separate unconfigured case to disclose. */
+	api_metered_cost_per_week: number;
+	/** `amortized_cost_per_week` (when configured) + `api_metered_cost_per_week` — never summed with `estimated_cost_per_week` (money semantics, src/lib/server/ledger.ts). */
+	actual_spend_per_week: number;
 	/** Always null — no deploy signal is instrumented yet (DESIGN.md: render honestly, don't proxy from merges). */
 	deploys_per_week: null;
 }
@@ -64,5 +68,9 @@ export const METHODOLOGY = {
 		'sum(sessions.total_cost) for sessions started in window, divided by weeks — list-price token valuation, not a metered bill (see src/lib/pricing/anthropic-pricing.ts).',
 	amortizedCostPerWeek:
 		'sum of covered amortized cost (src/lib/pricing/amortization.ts: plan fee spread by input+output token share, month by month) for interactive sessions in window, divided by weeks.',
+	apiMeteredCostPerWeek:
+		'sum(provider_costs.amount_usd) for dates in window (src/lib/providers/ — daily-aggregate spend pulled from each connected provider\'s cost API), divided by weeks. Real spend, not a token valuation.',
+	actualSpendPerWeek:
+		'amortized cost/week (when configured) + API-metered cost/week — both are real spend and compose; never summed with estimated cost/week (list-price token valuation is not spend).',
 	deploysPerWeek: 'not instrumented — no deploy signal exists yet; deliberately not proxied from merge count.'
 } as const;

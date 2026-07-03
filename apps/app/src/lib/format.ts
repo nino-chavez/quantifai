@@ -64,6 +64,39 @@ export function amortizedCoverageLabel(totals: {
 	return `covers ${totals.amortized_covered_sessions}/${totals.amortized_interactive_sessions} subscription sessions`;
 }
 
+/**
+ * `actual_spend` display copy — DESIGN.md rule 1's honest disclosure applied
+ * to the amortized+api_metered composite (see src/lib/server/ledger.ts
+ * `LedgerTotals.actual_spend`). Never claims a complete "actual spend"
+ * figure when the subscription portion is unconfigured — states plainly
+ * that only the API-metered portion is counted.
+ */
+export function actualSpendCaption(totals: {
+	amortization_configured: boolean;
+	provider_metered_cost: number;
+}): string {
+	if (!totals.amortization_configured && totals.provider_metered_cost <= 0) {
+		return 'no metered spend yet, subscription unconfigured';
+	}
+	if (!totals.amortization_configured) {
+		return 'API-metered portion only — subscription unconfigured';
+	}
+	return 'subscription amortized + API metered';
+}
+
+export function syncStatusLabel(status: 'ok' | 'error' | 'not_connected' | 'never_run'): string {
+	switch (status) {
+		case 'ok':
+			return 'connected';
+		case 'error':
+			return 'sync error';
+		case 'not_connected':
+			return 'not connected';
+		case 'never_run':
+			return 'never synced';
+	}
+}
+
 export function formatCommitCount(n: number): string {
 	if (n === 0) return 'no commits linked';
 	return n === 1 ? '1 commit' : `${n} commits`;

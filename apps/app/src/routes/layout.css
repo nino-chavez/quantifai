@@ -70,3 +70,13 @@ body {
 	border-color: color-mix(in srgb, var(--color-usage-blue) 45%, transparent);
 	background: color-mix(in srgb, var(--color-usage-blue) 12%, transparent);
 }
+
+/* Composite badge for `actual_spend` (amortized + api_metered) — distinct
+   from the single-provenance badges above; it is never one of the three
+   `cost_provenance` enum values, so it gets a neutral treatment rather than
+   borrowing gold/blue/green and implying it's a fourth provenance. */
+.provenance-badge--actual_spend {
+	color: var(--color-text);
+	border-color: var(--color-border);
+	background: var(--color-surface-raised);
+}

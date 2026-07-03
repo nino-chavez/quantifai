@@ -22,5 +22,15 @@
 	"observability": {
 		"enabled": true,
 		"head_sampling_rate": 1
+	},
+	// Daily provider-cost sync. 06:00 UTC — well after midnight UTC day
+	// rollover, giving providers' own cost pipelines time to settle the
+	// prior day's numbers before we fetch them. @sveltejs/adapter-cloudflare
+	// (as of 7.2.x) generates a worker with only a `fetch` export — no
+	// scheduled/queue/email merge point — so the `scheduled` handler this
+	// trigger invokes is added by a postbuild step; see
+	// scripts/patch-worker-scheduled.mjs.
+	"triggers": {
+		"crons": ["0 6 * * *"]
 	}
 }

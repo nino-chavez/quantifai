@@ -179,6 +179,20 @@
 						</td>
 						<td class="px-4 py-3 text-xs text-[var(--color-text-muted)]">{METHODOLOGY.amortizedCostPerWeek}</td>
 					</tr>
+					<tr class="border-b border-[var(--color-border)]">
+						<td class="px-4 py-3 text-[var(--color-text)]">Cost/week (API metered)</td>
+						<td class="metric-number px-4 py-3 text-[var(--color-savings-green)]" data-testid="api-metered-rate">
+							{formatUsd(data.rates.api_metered_cost_per_week)}
+						</td>
+						<td class="px-4 py-3 text-xs text-[var(--color-text-muted)]">{METHODOLOGY.apiMeteredCostPerWeek}</td>
+					</tr>
+					<tr class="border-b border-[var(--color-border)]">
+						<td class="px-4 py-3 text-[var(--color-text)]">Actual spend/week</td>
+						<td class="metric-number px-4 py-3 text-[var(--color-text)]" data-testid="actual-spend-rate">
+							{formatUsd(data.rates.actual_spend_per_week)}
+						</td>
+						<td class="px-4 py-3 text-xs text-[var(--color-text-muted)]">{METHODOLOGY.actualSpendPerWeek}</td>
+					</tr>
 					<tr>
 						<td class="px-4 py-3 text-[var(--color-text)]">Deploys/week</td>
 						<td class="px-4 py-3 text-[var(--color-text-muted)]" data-testid="deploys-not-instrumented">not instrumented</td>

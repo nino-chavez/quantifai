@@ -5,7 +5,9 @@
 		formatCommitCount,
 		formatSessionCount,
 		dominantProvenance,
-		amortizedCoverageLabel
+		amortizedCoverageLabel,
+		actualSpendCaption,
+		syncStatusLabel
 	} from '$lib/format';
 	import { resolve } from '$app/paths';
 	import type { LedgerData, UnitOfWorkRow } from '$lib/server/ledger';
@@ -41,6 +43,53 @@
 			Practice numbers — rates, per-project export →
 		</a>
 	</header>
+
+	<!-- API usage bucket (slice 3): provider-metered spend is daily-aggregate,
+	     independent of session import and unattributable to a unit of work —
+	     its own section, never force-allocated to a project (DESIGN.md), and
+	     rendered regardless of whether any Claude Code sessions exist yet. -->
+	<section class="mb-10" data-testid="provider-buckets">
+		<h2 class="font-display text-sm uppercase tracking-[0.15em] text-[var(--color-text-muted)]">
+			API usage — provider-metered spend
+		</h2>
+		<ul class="mt-4 space-y-2">
+			{#each data.providerBuckets as bucket (bucket.provider)}
+				<li
+					class="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[var(--color-border)] px-4 py-3"
+					data-testid="provider-bucket-{bucket.provider}"
+				>
+					<div class="flex items-center gap-3">
+						<span class="text-sm capitalize text-[var(--color-text)]">{bucket.provider}</span>
+						{#if bucket.last_sync_status === 'not_connected'}
+							<span class="text-xs text-[var(--color-text-muted)]" data-testid="not-connected-{bucket.provider}">
+								not connected
+							</span>
+						{:else}
+							<span class="provenance-badge provenance-badge--api_metered">api metered</span>
+							<span class="text-xs text-[var(--color-text-muted)]">
+								{syncStatusLabel(bucket.last_sync_status)}
+							</span>
+						{/if}
+					</div>
+					<div class="flex items-center gap-4">
+						{#if bucket.last_sync_status !== 'not_connected'}
+							<span class="metric-number text-sm text-[var(--color-savings-green)]">
+								{formatUsd(bucket.total_amount_usd)}
+							</span>
+							<span class="text-xs text-[var(--color-text-muted)]">
+								{bucket.days_covered} {bucket.days_covered === 1 ? 'day' : 'days'}
+							</span>
+						{/if}
+					</div>
+					{#if bucket.last_sync_error}
+						<p class="w-full text-xs text-[var(--color-overage-red)]" data-testid="sync-error-{bucket.provider}">
+							{bucket.last_sync_error}
+						</p>
+					{/if}
+				</li>
+			{/each}
+		</ul>
+	</section>
 
 	{#if isEmpty}
 		<section
@@ -91,6 +140,18 @@
 					{/if}
 					<p class="mt-2 text-xs text-[var(--color-text-muted)]">
 						{amortizedCoverageLabel(data.totals)}
+					</p>
+				</div>
+				<div data-testid="hero-actual-spend">
+					<p class="text-sm text-[var(--color-text-muted)]">Actual spend, all time (real dollars paid)</p>
+					<p class="metric-number font-display mt-1 text-5xl font-semibold text-[var(--color-savings-green)]">
+						{formatUsd(data.totals.actual_spend)}
+					</p>
+					<span class="provenance-badge provenance-badge--actual_spend mt-2">
+						amortized + api metered
+					</span>
+					<p class="mt-2 text-xs text-[var(--color-text-muted)]">
+						{actualSpendCaption(data.totals)}
 					</p>
 				</div>
 			</div>
