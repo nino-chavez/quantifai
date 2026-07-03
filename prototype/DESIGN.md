@@ -18,7 +18,7 @@ Canonical five, product-mapped: **Match the existing product** — greenfield, s
 
 **L0 — tokens** (inherited from quantifai-lite, the salvaged brand): warm dark neutrals (`#0a0a0a` bg, `#131210` surface), gold accent `#f0c05e`/`#e8a735`; Space Grotesk (display) / Inter (body) / JetBrains Mono (numeric); `.metric-number` tabular numerals. Semantic chart palette, formalized per the assessment's P0: **gold = cost (primary), blue = usage, green = savings/reclaimable, red = overage/breach**; provider identity by ordinal neutrals, not brand colors (four vendors' brand palettes would fight the semantic layer).
 
-**L1 — atoms:** metric number; provenance badge (`metered`/`allocated`/`unmanaged` — distinct fill, not color-only, accessibility); trend delta (▲▼ + %); threshold marker (chart rule + label); coverage chip ("71% metered"); connection-status dot.
+**L1 — atoms:** metric number; provenance badge (`subscription_amortized`/`api_metered`/`estimated` — matches the schema enum; distinct fill, not color-only, accessibility); trend delta (▲▼ + %); threshold marker (chart rule + label); coverage chip ("N/N sessions covered"); connection-status dot.
 
 **L2 — molecules:** metric card (hero number + delta + sparkline); insight card (icon, one-sentence finding, dollar figure, single CTA); unit-of-work row (initiative/project name, cost, provenance mix, output pair, session count); tier-split row (model tier, cost share, what ran on it).
 
@@ -38,7 +38,7 @@ Canonical five, product-mapped: **Match the existing product** — greenfield, s
 ## Architectural invariants
 
 1. **Boundary parsing** — provider payloads are parsed/validated at the adapter boundary (one Zod schema per provider adapter); nothing downstream touches raw provider JSON.
-2. **Page metadata** — every prototype page exposes `window.PROTO_PAGE` metadata per the slice-metadata contract (`_meta/<page-id>.json` kept in sync).
+2. **Page metadata** — portal-contract invariant, N/A for the product app (recorded 2026-07-03 after two slices shipped without it): `window.PROTO_PAGE` belongs to Blueprint portal prototype pages; `apps/app/` is the product, not a portal prototype, and does not carry it.
 3. **Single Providers interface** — all four connectors implement one `Provider` interface (fetch window → normalized rows with provenance); no per-provider special-casing outside its adapter.
 4. **One-primary-CTA structural lint** — the one-primary-action rule above is enforced by a structural lint (test asserts ≤1 `data-primary-cta` per rendered page), not by review vigilance.
 
