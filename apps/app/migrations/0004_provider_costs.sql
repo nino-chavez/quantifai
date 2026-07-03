@@ -1,8 +1,9 @@
 -- Provider-metered cost pollers (slice 3). Two tables:
 --
 -- `provider_costs` — daily-aggregate API-metered spend pulled from each
--- provider's admin/cost API (Anthropic Cost API first; OpenAI/OpenRouter
--- ship code-complete but disabled — see src/lib/providers/). This is
+-- provider's admin/cost API (Anthropic Cost API and OpenRouter's daily
+-- activity endpoint are connected; OpenAI ships code-complete but
+-- disabled — see src/lib/providers/). This is
 -- REAL spend (DESIGN.md rule 1 extension, documented in
 -- src/lib/pricing/ actual-spend module): unlike `sessions`, which is
 -- session-grain and mixes `estimated`/`subscription_amortized`/
