@@ -72,6 +72,15 @@ Track: **Convention** (what the ecosystem does / vendor-asserted capability) vs 
 
 No quality claim in this synthesis rests on a convention-only reference: the two load-bearing quality claims (showback prevalence, utilization benchmarks) cite FinOps Foundation and Zylo survey data; all vendor capability statements are labeled vendor-claimed.
 
+## Re-target addendum (2026-07-03, ADR-0003) — read before citing anything above
+
+The pilot re-targeted same-day from `commerce-ai-ops-cfo` to `solo-operator-practice-pricing` (disqualifier: owner unreachable; KQ-a failed permanently). Effect on this synthesis:
+
+- **Historical (enterprise-buyer conclusions):** the dedicated-vendor kill-question verdict (Larridin/Torii/Olakai/Finout), the CFO-surface patterns (seat dormancy, showback/chargeback gating), and the enterprise rows of the feasibility table. Kept for the record and for the agency revenue hypothesis later; not competitors of record for the pilot.
+- **Surviving unchanged:** the sibling scan (inheritance map improves — shipper promotes to core), the normalization-layer pattern, FOCUS-aligned schema naming (DP-6), provenance discipline (DP-1, categories re-derived as subscription-amortized/API-metered/estimated), claims-match-GA (DP-5), insight-cards-over-tables (DP-4), the "absence of screenshots is the market gap" finding — which now reads at the unit-of-work grain.
+- **Superseded kill-questions:** KQ-a/KQ-d (owner walkthrough/demand) resolve via the first-party walkthrough; new KQ-1/2/3 defined in ADR-0003 (grain already served? / decision-changing within 30 days? / external pull?).
+- **New competitive leg:** `research/competitive/solo-market.md` (ccusage, provider-native personal surfaces, OpenRouter, Helicone-class) — the competitors of record for this pilot.
+
 ## Handoff to Stage 2
 
 Inputs ready: DP-1..6 above, the pilot's first screen (org spend rollup + trend + threshold, interview Q5), inherited component inventory (sibling scan), Finout grid ordering, insight-card list. Pending operator tasks carried forward: (1) AI Ops owner walkthrough (KQ-a/KQ-d — gates Stage 3), (2) live Copilot per-user billing test on a Business/Enterprise org (decides Copilot drill-down grain), (3) confirm Commerce.com's Cursor plan tier (Enterprise-gated APIs), (4) Stage 4 fact-check of DX's actual grain.

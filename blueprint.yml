@@ -16,28 +16,25 @@ project:
 # quantifai-platform repo — the retrospective that spawned this initiative.
 # ──────────────────────────────────────────────────────────────────
 pilot_profile:
-  slug: "commerce-ai-ops-cfo"      # re-targeted from commerce-ai-tool-admin per ADR-0002
-  display_name: "AI Ops function reporting to the CFO at Commerce.com (via internal champion: Product Architect)"
-  pain_point: "The AI Ops function under the CFO cannot answer what Commerce.com spent on AI tools this month across Claude Code + Copilot + Cursor + ChatGPT without logging into four provider consoles and hand-assembling a spreadsheet — no cross-provider rollup, trend, or budget threshold exists."
-  monetization_side: "buyer — AI Ops under the CFO, Commerce.com internal-first (commercial only after the pilot proves)"
-  walkthrough_citation: "research/sources/stakeholder-interview-2026-07-03-nino-chavez.md"
-                                    # PROXY artifact: internal-champion interview, not the owner's
-                                    # walkthrough. The AI Ops owner's direct walkthrough is a
-                                    # Stage 1 validation task and remains the kill-gate (ADR-0002).
-  competitors_in_scope:             # derived from this pilot (CFO-side owner, cross-provider)
-    - "Anthropic Console + Claude Code Analytics API (provider-native)"
-    - "Cursor Organizations dashboard (provider-native)"
-    - "GitHub Copilot metrics dashboard + Metrics API (provider-native)"
-    - "ChatGPT Enterprise / OpenAI usage dashboards (provider-native)"
-    - "Larridin (Token Spend & Insights)"
-    - "Torii AI Management Platform"
-    - "Olakai"
-    - "Cloud FinOps suites with AI add-ons (Finout-class) — in scope per ADR-0002"
+  slug: "solo-operator-practice-pricing"   # re-targeted per ADR-0003 (prior: commerce-ai-ops-cfo, ADR-0002 — disqualifier: owner unreachable, KQ-a failed permanently)
+  display_name: "Solo AI-heavy operator pricing their own practice (user #0: the operator himself)"
+  pain_point: "A solo operator running a multi-project, multi-provider, agent-orchestrated practice cannot answer what a unit of work — an initiative, a project, a session — cost across subscription and API spend, nor what it produced, so routing decisions, plan choices, and leverage claims all run on vibes."
+  monetization_side: "operator — dogfood-first; revenue hypothesis is the same primitive (cost-per-unit-of-work) sold to consultancies/agencies as billing/margin, gated on external pull (ADR-0003 KQ-3)"
+  walkthrough_citation: "research/sources/walkthrough-2026-07-03-user0-practice-pricing.md"
+                                    # FIRST-PARTY artifact: the 2026-07-03 session itself (nine-agent
+                                    # fan-out, unpriceable) + the positioning one-pager's empty metric
+                                    # brackets + the cost dial's own no-cost-telemetry admission.
+  competitors_in_scope:             # derived from this pilot (solo operator, unit-of-work grain)
+    - "ccusage (OSS Claude Code cost analyzer)"
+    - "Claude /cost + Max/Pro usage surfaces (provider-native, personal scope)"
+    - "Cursor / Copilot / OpenAI personal usage dashboards (provider-native)"
+    - "OpenRouter activity dashboard (cross-model, API-only)"
+    - "Helicone/Langfuse-class trackers on free tiers (API builders, not coding-tool practices)"
   out_of_scope_pilots:
-    - "Solo developer tracking own spend (quantifai-lite's old audience)"
-    - "General cloud-infra FinOps buyer (narrowed from ADR-0001 wording per ADR-0002)"
-    - "Engineering-productivity ROI buyer (Faros/Jellyfish/DX territory)"
-    - "Platform-eng seat administrator (ADR-0001's original pilot — superseded by ADR-0002)"
+    - "Enterprise AI Ops / CFO function (ADR-0002's pilot — retired, owner unreachable)"
+    - "Small engineering team 2-20 (growth path — org_id schema supports it; NOT the pilot, per ADR-0003)"
+    - "Engineering-productivity ROI buyer (DX/Faros territory)"
+    - "General cloud-infra FinOps buyer"
 
 # Pipeline shape — see Blueprint docs/variant-selection.md (methodology source)
 variant: greenfield
