@@ -308,7 +308,18 @@ async function writeLocal(
 
 	// Pass 3: sessions + messages, chunked into one file per chunk to keep
 	// each `wrangler d1 execute --file` invocation to a reasonable size.
-	for (const batch of chunk(sessions, 500)) {
+	// LOCAL_SQL_CHUNK_SIZE is intentionally much smaller than the 500-row
+	// DEDUP_CHUNK_SIZE used elsewhere: measured empirically (QUANTIFAI_DEBUG_SQL=1),
+	// wrangler's local D1 executor rejects a --file with SQLITE_TOOBIG well
+	// under SQLite's own ~1MB SQL-length default — a 100-session chunk
+	// (~200KB) already fails, a 61-statement units_of_work chunk (~18KB)
+	// succeeds. 40 rows keeps every observed chunk (sessions' heavier
+	// CASE/json_group_array upsert included) comfortably under that ceiling.
+	// Only affects this dev-fast-path write; the remote ingest endpoint has
+	// no such cap (ADR-0005 — a Worker querying D1 directly, no per-file
+	// indirection).
+	const LOCAL_SQL_CHUNK_SIZE = 40;
+	for (const batch of chunk(sessions, LOCAL_SQL_CHUNK_SIZE)) {
 		const sql = batch
 			.map((s) => {
 				const unitId = unitIdByPath.get(s.unitProjectPath) ?? null;
@@ -345,7 +356,7 @@ async function writeLocal(
 		runD1File(sql, d1opts);
 	}
 
-	for (const batch of chunk(messages, 500)) {
+	for (const batch of chunk(messages, LOCAL_SQL_CHUNK_SIZE)) {
 		const sql = batch
 			.map(
 				(m) => `INSERT INTO messages (id, session_id, message_id, timestamp, model, provider, input_tokens, output_tokens, cache_read, cache_creation, est_cost, cost_provenance, record_type)

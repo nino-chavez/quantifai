@@ -38,6 +38,20 @@ npm run import:git -- --local
 
 Both are idempotent — re-running recomputes from source and upserts.
 
+## Configure subscription amortization (the honest second number)
+
+Every cost is `estimated` (list-price API-equivalent) until you record your
+actual subscription plan fee — there is no fabricated default. Record it with:
+
+```sh
+npm run seed:plan -- --provider anthropic --plan "Claude Max" \
+  --fee 200 --from 2026-01-01 [--to 2026-06-30] [--local]
+```
+
+Until a plan is recorded, the ledger and practice-numbers pages render an
+explicit "amortization unconfigured — set your plan fee" empty state instead
+of a $0. See `src/lib/pricing/amortization.ts` for the usage-share method.
+
 ## Run
 
 ```sh
@@ -83,3 +97,12 @@ npx playwright test             # @smoke e2e — builds and runs against `wrangl
 - `src/routes/+page.svelte` — the `unit-of-work-ledger` page (DESIGN.md L4),
   gated by Cloudflare Access in production (see the initiative's final
   report for the Access application config).
+- `src/routes/practice-numbers/` — the `practice-numbers` page (DESIGN.md L4,
+  JTBD-3): per-project/initiative cost+output and practice-level rates
+  (commits/merges/sessions/cost per week) over a 30/90/all-time window, with
+  an "Export numbers" CTA that downloads markdown + CSV. Deploys/week
+  renders "not instrumented" honestly rather than proxying merges as deploys.
+- `src/lib/pricing/amortization.ts` — subscription-amortization math (usage-
+  share apportionment of a plan fee across a calendar month's sessions).
+- `scripts/seed-subscription-plan.ts` — records the operator's real plan fee
+  into `subscription_plans` (never fabricated — see above).

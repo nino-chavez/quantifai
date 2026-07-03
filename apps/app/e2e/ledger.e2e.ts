@@ -3,8 +3,8 @@ import { test, expect } from '@playwright/test';
 /**
  * @smoke — the one Playwright test DESIGN.md's testing baseline requires for
  * this slice: the ledger renders with seeded (here: really-imported) data and
- * provenance badges are present. Requires the local Supabase stack running
- * (`npx supabase start`) with both importers already run — see README /
+ * provenance badges are present. Requires the local D1 file migrated
+ * (`npm run db:migrate:local`) with both importers already run — see README /
  * package.json `import:claude` + `import:git` — since this hits the real
  * dev/preview server's load function, not a mocked fixture.
  */
