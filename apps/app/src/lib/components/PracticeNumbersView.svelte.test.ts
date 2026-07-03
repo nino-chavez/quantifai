@@ -32,6 +32,8 @@ const EMPTY: PracticeNumbersData = {
 		sessions_per_week: 0,
 		estimated_cost_per_week: 0,
 		amortized_cost_per_week: null,
+		api_metered_cost_per_week: 0,
+		actual_spend_per_week: 0,
 		deploys_per_week: null
 	}
 };
@@ -48,6 +50,8 @@ const WITH_DATA: PracticeNumbersData = {
 		sessions_per_week: 2.8,
 		estimated_cost_per_week: 10.62,
 		amortized_cost_per_week: 7.0,
+		api_metered_cost_per_week: 3.5,
+		actual_spend_per_week: 10.5,
 		deploys_per_week: null
 	}
 };

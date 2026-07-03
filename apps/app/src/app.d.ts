@@ -18,6 +18,14 @@ declare global {
 				 * (see src/lib/server/ingest-auth.ts).
 				 */
 				INGEST_API_KEY_HASH?: string;
+				/** Cron Trigger's internal auth for POST /api/v1/sync-providers — see src/lib/server/sync-auth.ts. */
+				CRON_SYNC_SECRET?: string;
+				/** Anthropic Admin API key (`sk-ant-admin01-...`) — src/lib/providers/anthropic.ts. Verified working against /v1/organizations/me and /v1/organizations/cost_report. */
+				ANTHROPIC_ADMIN_API_KEY?: string;
+				/** OpenAI Admin API key — src/lib/providers/openai.ts. Absent: provider renders "not connected" (DESIGN.md rule 7). */
+				OPENAI_ADMIN_API_KEY?: string;
+				/** OpenRouter API key — src/lib/providers/openrouter.ts. Absent: provider renders "not connected" (DESIGN.md rule 7). */
+				OPENROUTER_API_KEY?: string;
 			};
 		}
 	}

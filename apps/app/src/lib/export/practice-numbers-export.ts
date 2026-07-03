@@ -58,13 +58,19 @@ export function buildPracticeNumbersMarkdown(data: PracticeNumbersData): string 
 		`| Cost/week (estimated) | ${formatUsd(data.rates.estimated_cost_per_week)}/week | ${METHODOLOGY.estimatedCostPerWeek} |`
 	);
 	lines.push(`| Cost/week (amortized) | ${amortizedRateCell(data)} | ${METHODOLOGY.amortizedCostPerWeek} |`);
+	lines.push(
+		`| Cost/week (API metered) | ${formatUsd(data.rates.api_metered_cost_per_week)}/week | ${METHODOLOGY.apiMeteredCostPerWeek} |`
+	);
+	lines.push(
+		`| Actual spend/week | ${formatUsd(data.rates.actual_spend_per_week)}/week | ${METHODOLOGY.actualSpendPerWeek} |`
+	);
 	lines.push(`| Deploys/week | not instrumented | ${METHODOLOGY.deploysPerWeek} |`);
 	lines.push('');
 	lines.push(
 		'_Estimated cost is a list-price token valuation on subscription usage, not a metered bill. Amortized cost spreads the operator-entered subscription plan fee across a calendar month'
 	);
 	lines.push(
-		'by each session\'s share of input+output tokens; API-metered usage is out of scope for amortization (future `api_metered` provenance). The two figures are never summed._'
+		'by each session\'s share of input+output tokens; API-metered usage (from provider cost APIs, src/lib/providers/) is out of scope for amortization. Amortized and API-metered cost are both real spend and compose into "actual spend"; estimated cost never sums with either._'
 	);
 	return lines.join('\n') + '\n';
 }

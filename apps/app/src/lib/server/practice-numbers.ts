@@ -20,6 +20,7 @@ import type { D1Database } from '@cloudflare/workers-types';
 import { computeAmortizationRollup, UNASSIGNED_UNIT_KEY } from './amortization-query';
 import { listSubscriptionPlans } from './subscription-plans';
 import { commitStatsByUnit } from './git-events';
+import { providerCostTotalSince } from './provider-costs';
 import {
 	resolveWindow,
 	type PracticeNumbersData,
@@ -75,11 +76,12 @@ export async function loadPracticeNumbers(
 ): Promise<PracticeNumbersData> {
 	const window = resolveWindow(windowParam, now);
 
-	const [units, sessionStats, gitStats, plans] = await Promise.all([
+	const [units, sessionStats, gitStats, plans, apiMeteredCostWindow] = await Promise.all([
 		unitBaseRows(db),
 		sessionStatsByUnit(db, window.sinceIso),
 		commitStatsByUnit(db, window.sinceIso),
-		listSubscriptionPlans(db)
+		listSubscriptionPlans(db),
+		providerCostTotalSince(db, window.sinceIso)
 	]);
 
 	const amortizationRollup = await computeAmortizationRollup(db, plans, window.sinceIso);
@@ -126,13 +128,20 @@ export async function loadPracticeNumbers(
 	}
 	weeks = Math.max(weeks, 1 / 7); // guard against a same-day window collapsing to 0
 
+	const amortizedCostPerWeek = amortizationConfigured ? amortizationRollup.totals.amortizedCostUsd / weeks : null;
+	const apiMeteredCostPerWeek = apiMeteredCostWindow / weeks;
+
 	const rates: PracticeRates = {
 		weeks,
 		commits_per_week: totalCommits / weeks,
 		merges_per_week: totalMerges / weeks,
 		sessions_per_week: totalSessions / weeks,
 		estimated_cost_per_week: totalEstimatedCost / weeks,
-		amortized_cost_per_week: amortizationConfigured ? amortizationRollup.totals.amortizedCostUsd / weeks : null,
+		amortized_cost_per_week: amortizedCostPerWeek,
+		api_metered_cost_per_week: apiMeteredCostPerWeek,
+		// Money semantics: amortized + api_metered compose into actual spend;
+		// never summed with estimated_cost_per_week (src/lib/server/ledger.ts).
+		actual_spend_per_week: (amortizedCostPerWeek ?? 0) + apiMeteredCostPerWeek,
 		deploys_per_week: null
 	};
 

@@ -1,0 +1,55 @@
+name: CI
+
+# quantifai-next CI (apps/app). Deliberately no deploy step — deploys stay
+# manual wrangler (`npm run deploy` from apps/app), per the slice-3 scope.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Test (vitest, svelte-check, eslint)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # apps/app's src/lib/server/test-support/fake-d1.ts uses node:sqlite —
+      # requires Node 22+.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck + Svelte check
+        working-directory: apps/app
+        run: npm run check
+
+      - name: Lint
+        working-directory: apps/app
+        run: npm run lint
+
+      - name: Unit tests
+        working-directory: apps/app
+        run: npm run test:unit -- --run
+
+  gitleaks:
+    name: Gitleaks secret scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

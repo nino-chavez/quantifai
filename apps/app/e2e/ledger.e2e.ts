@@ -14,6 +14,10 @@ test('@smoke ledger renders practice total, unit rows, and provenance disclosure
 
 	await expect(page.getByRole('heading', { name: /what your practice cost/i })).toBeVisible();
 
+	// Provider-cost buckets (slice 3) render regardless of session-import
+	// state — independent of the empty/populated split below.
+	await expect(page.getByTestId('provider-buckets')).toBeVisible();
+
 	// Either the empty state or the populated hero must render — never a blank page.
 	const hero = page.getByTestId('hero');
 	const emptyState = page.getByTestId('empty-state');
@@ -27,6 +31,9 @@ test('@smoke ledger renders practice total, unit rows, and provenance disclosure
 
 		await expect(page.getByTestId('ledger-table')).toBeVisible();
 		await expect(page.getByTestId('cost-vs-output-strip')).toBeVisible();
+		// Actual spend (amortized + api_metered) is its own hero figure, never
+		// summed with the estimated/API-equivalent figure above.
+		await expect(page.getByTestId('hero-actual-spend')).toContainText('$');
 
 		// Structural lint, browser-verified: a populated ledger is a read
 		// surface — zero primary CTAs (DESIGN.md).
