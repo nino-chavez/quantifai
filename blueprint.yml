@@ -1,0 +1,108 @@
+# Blueprint Configuration — stamped by template/tools/blueprint-init on 2026-07-03
+
+project:
+  name: "quantifai-next"
+  description: "Cross-provider AI spend attribution, per developer"
+  product: "QuantifAI"
+  audience:
+    leadership: []                  # Commerce.com stakeholder — fill when pilot profile locks
+    engineering: []
+    broader: []
+
+# ──────────────────────────────────────────────────────────────────
+# Pilot profile (REQUIRED — Stage 0 → Stage 1 gate)
+# Reviewer: pilot-profile-lock-reviewer (blocks Stage 1 until filled)
+# Derived from docs/strategic/retrospective-review-2026-07.md in the
+# quantifai-platform repo — the retrospective that spawned this initiative.
+# ──────────────────────────────────────────────────────────────────
+pilot_profile:
+  slug: "commerce-ai-tool-admin"
+  display_name: "Platform-engineering lead administering AI coding tools at Commerce.com"
+  pain_point: "Cannot answer, per developer across Claude Code + Copilot + Cursor, what AI tooling cost this month, which seats are actually used vs held, and what the spend produced — attribution stops at each provider's own dashboard."
+  monetization_side: "buyer — internal platform-eng/IT (Commerce.com internal-first; commercial only after the pilot proves)"
+  walkthrough_citation: ""          # ← THE KILL-GATE. Must cite a REAL artifact from a named
+                                    # Commerce.com stakeholder (interview notes, a walkthrough of
+                                    # how they answer spend questions today, a screenshot set of
+                                    # their current process). Per the retrospective: no stakeholder
+                                    # artifact → initiative ends at Stage 1 as a documented retire.
+  competitors_in_scope:             # derived FROM this pilot (org admin, cross-provider)
+    - "Anthropic Console + Claude Code Analytics API (provider-native)"
+    - "Cursor Organizations dashboard (provider-native)"
+    - "GitHub Copilot metrics dashboard + Metrics API (provider-native)"
+    - "Larridin (Token Spend & Insights)"
+    - "Torii AI Management Platform"
+    - "Olakai"
+  out_of_scope_pilots:
+    - "Solo developer tracking own spend (quantifai-lite's old audience)"
+    - "Finance/FinOps chargeback buyer (Finout/CloudZero/Vantage territory)"
+    - "Engineering-productivity ROI buyer (Faros/Jellyfish/DX territory)"
+
+# Pipeline shape — see Blueprint docs/variant-selection.md (methodology source)
+variant: greenfield
+
+# Deliverable sophistication — see Blueprint docs/portal-and-tier-ladder.md (methodology source)
+# Variant × Tier matrix codified in that doc; do not deviate without an ADR.
+tier: 1
+
+# Portal type — which portal harness this initiative uses
+# initiative = Initiative Portal (Astro + @blueprint/ui, multi-audience platform front-door)
+# review     = Review Portal (static HTML + drawers, brownfield audit/redesign)
+# bespoke    = custom portal with mandatory divergence ADR in decisions/
+portal_type: initiative
+
+# ──────────────────────────────────────────────────────────────────
+# Portal harness config (Initiative Portal). Read by apps/portal/src/lib/portal-config.ts.
+# Tier-0 default: ZERO data sources wired. The portal builds green and shows the
+# decisions catalog + strategy excerpts; every optional substrate section hides.
+# Wire a source = set its path to a repo-relative file that exists, then rebuild.
+# A typo'd path simply keeps the section hidden — it never crashes the build.
+# ──────────────────────────────────────────────────────────────────
+portal:
+  repo_url: "https://github.com/your-org/quantifai-next"
+  decisions:
+    dir: "decisions"               # folder of NNNN-slug.md decision records (ADRs)
+    # filename_pattern: "^(?:ADR-)?(\\d{4})-(.+)\\.md$"  # override the matcher if your ADRs are named differently
+  # Optional derived-data sources. Each is a repo-relative path to a JSON file
+  # produced by a consumer-side derive tool. null = section hidden (Tier 0).
+  sources:
+    state: null                    # capability state-derive   → enables Inspect/coverage
+    board: null                    # work-board derive         → enables Roadmap
+    epic_footprints: null          # per-epic footprint derive → enriches Roadmap epic progress
+    attestations: null             # gate attestations derive  → enables Inspect/attestations
+    proposals: null                # proposal/issue derive     → enables Inspect/dependencies
+    dep_graph: null                # dependency-graph derive   → enables the dep-graph view
+    scenarios: null                # demo scenarios json       → enables Try/scenarios
+    build_order: null              # build-order plan          → enables Roadmap build order
+  # 10-gate Epic-DoD compliance grid. Off by default; needs an epics model + a
+  # state-derive tool. enabled:false keeps @blueprint/gate-derive yielding empty.
+  gates:
+    enabled: false
+    epics_source: null             # repo-relative module/json supplying the EPICS list
+    gate_labels: []                # 10 labels for the gate columns; empty = generic
+  # board:    bucket labels, phase order, epic-tracker issue range (see portal-config.ts)
+  # excerpts: strategy-doc excerpts to surface on the home/strategy pages
+  # home / operate / inspect / surfaces / archaeology: navigation + content (Phase B)
+
+execution:
+  depth: lean                       # per retrospective: research + prototype + 1 strategy doc;
+                                    # solo internal-first tool — standard/thorough is gold-plating
+
+# ──────────────────────────────────────────────────────────────────
+# Cost / effort dial (ADR-0003) — per-stage model tiers, anchors from the
+# tiered-orchestration ladder. Mechanical research sub-sweeps (competitor-doc
+# reads, API-capability inventories) fan out to haiku/sonnet subagents at
+# dispatch time per docs/patterns/tiered-orchestration-pattern.md; the stage
+# tier below governs the orchestrating/arbitrating pass.
+# ──────────────────────────────────────────────────────────────────
+cost:
+  default:
+    effort: medium
+    model_tier: inherit
+  stages:
+    research:    { effort: high,  model_tier: inherit }   # arbitration in-session; sweeps fan to haiku/sonnet
+    design:      { effort: high,  model_tier: inherit }
+    prototype:   { effort: high,  model_tier: sonnet }
+    fact_check:  { effort: xhigh, model_tier: inherit }   # false-green guard — do not cheapen
+    documents:   { effort: medium, model_tier: sonnet }
+    deploy:      { effort: low,   model_tier: sonnet, skip_justification: "mechanical" }
+    iterate:     { effort: medium, model_tier: sonnet }

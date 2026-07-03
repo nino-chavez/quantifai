@@ -1,0 +1,29 @@
+{
+  "_comment": "Example Claude Code user settings. Merge the SessionStart and SessionEnd blocks below into your ~/.claude/settings.json. Each hook script ships with the template under template/.claude/hooks/; install both to ~/.claude/hooks/ (scaffold.sh handles this when archaeology is enabled). The SessionStart hook detects Blueprint initiatives by walking up for a blueprint.yml — non-Blueprint sessions get no injection.",
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ~/.claude/hooks/blueprint-session-start.py",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ~/.claude/hooks/archaeology-session-end.py",
+            "timeout": 60
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,7 @@
+/* Order matters: design tokens first so packages/ui can resolve --quan-* variables */
+@import '@blueprint/design-tokens/css';
+@import '@blueprint/ui/styles';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;

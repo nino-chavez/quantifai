@@ -1,0 +1,85 @@
+---
+import Layout from '@/layouts/Layout.astro';
+import { portalConfig } from '@/lib/portal-config';
+
+const cfg = portalConfig();
+
+interface OperateItem {
+  title: string;
+  description: string;
+  href?: string;
+  status?: string;
+}
+
+interface PlannedItem {
+  title: string;
+  description: string;
+}
+
+// Operational playbooks come from blueprint.yml's portal.operate block.
+// REPLACE_FOR_PROJECT: list available runbooks under operate.items and
+// upcoming guides under operate.planned. Empty at Tier-0.
+const items: OperateItem[] = cfg.operate.items.map((i: any) => ({
+  title: String(i?.title ?? ''),
+  description: String(i?.description ?? ''),
+  href: i?.href ? String(i.href) : undefined,
+  status: i?.status ? String(i.status) : 'Available',
+}));
+const planned: PlannedItem[] = cfg.operate.planned.map((p: any) => ({
+  title: String(p?.title ?? ''),
+  description: String(p?.description ?? ''),
+}));
+---
+<Layout title="Operate" description="Use it day-to-day. Operational playbooks and runbooks.">
+  <header class="mb-10 max-w-3xl">
+    <p class="mb-2 font-mono text-xs uppercase tracking-wide text-warning">Operate</p>
+    <h1 class="mb-3 font-heading text-4xl font-semibold leading-tight tracking-tight">
+      Use it day-to-day.
+    </h1>
+    <p class="text-lg leading-relaxed text-contrast-500">
+      The operational layer for after the demo is over — onboarding guides, runbooks, and day-to-day playbooks. <strong class="font-medium text-foreground">Typically the thinnest lane.</strong> Authored playbooks land here as operational scenarios graduate into structured guides.
+    </p>
+  </header>
+
+  <section class="mt-10">
+    <h2 class="mb-3 font-heading text-lg font-semibold tracking-tight">What's available today</h2>
+    {items.length > 0 ? (
+      <ul class="space-y-2">
+        {items.map((item) => (
+          <li class="flex items-baseline gap-3 rounded-lg border border-contrast-200 bg-background p-4">
+            <span class="font-mono text-[10px] uppercase tracking-wide text-success-foreground">{item.status}</span>
+            <div class="flex-1">
+              <p class="text-sm font-medium text-foreground">{item.title}</p>
+              {item.description && <p class="text-xs text-contrast-500">{item.description}</p>}
+            </div>
+            {item.href && (
+              <a href={item.href} target="_blank" rel="noreferrer" class="shrink-0 font-mono text-[11px] uppercase tracking-wide text-brand hover:underline">open ↗</a>
+            )}
+          </li>
+        ))}
+      </ul>
+    ) : (
+      <div class="rounded-lg border border-dashed border-contrast-300 bg-background p-5">
+        <p class="mb-1 font-mono text-[10px] uppercase tracking-wide text-contrast-400">Not configured</p>
+        <p class="text-sm leading-relaxed text-contrast-500">
+          No operational playbooks are configured for this initiative yet. Playbooks land here as operational scenarios graduate into structured guides — add them to <code class="font-mono text-xs">blueprint.yml</code> under <code class="font-mono text-xs">portal.operate.items</code>.
+        </p>
+      </div>
+    )}
+  </section>
+
+  {planned.length > 0 && (
+    <section class="mt-8">
+      <h2 class="mb-3 font-heading text-lg font-semibold tracking-tight">Planned playbooks</h2>
+      <div class="grid gap-3 md:grid-cols-2">
+        {planned.map((p) => (
+          <div class="rounded-lg border border-dashed border-contrast-300 bg-background p-4">
+            <p class="mb-1 font-mono text-[10px] uppercase tracking-wide text-contrast-400">Planned</p>
+            <p class="font-medium text-foreground">{p.title}</p>
+            {p.description && <p class="mt-1 text-xs text-contrast-500">{p.description}</p>}
+          </div>
+        ))}
+      </div>
+    </section>
+  )}
+</Layout>

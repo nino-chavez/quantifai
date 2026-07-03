@@ -1,0 +1,73 @@
+---
+import Layout from '@/layouts/Layout.astro';
+import { LiveIframe, StatusBadge, type Status } from '@blueprint/ui';
+import { TryNav } from '@/components/TryNav';
+import { portalConfig } from '@/lib/portal-config';
+
+const { surfaces, features } = portalConfig();
+
+// Surfaces are declared in blueprint.yml's portal.surfaces and resolved to a
+// generic shape here. A freshly-stamped Tier-0 portal has no surfaces → empty
+// state. REPLACE_FOR_PROJECT: add live-demo surfaces under portal.surfaces.
+const VALID_STATUS: Status[] = ['ready', 'partial', 'missing', 'not-applicable', 'planned'];
+const SURFACES = surfaces.map((s: any, i: number) => ({
+  id: typeof s?.id === 'string' && s.id.length > 0 ? s.id : `surface-${i}`,
+  label: typeof s?.label === 'string' ? s.label : '',
+  src: typeof s?.src === 'string' ? s.src : '',
+  note: typeof s?.note === 'string' ? s.note : '',
+  status: (VALID_STATUS.includes(s?.status) ? s.status : 'planned') as Status,
+}));
+---
+<Layout title="Try" description="See it work — open the live surfaces configured for this initiative.">
+  <header class="mb-6 max-w-3xl">
+    <p class="mb-2 font-mono text-xs uppercase tracking-wide text-success">Try</p>
+    <h1 class="mb-3 font-heading text-4xl font-semibold leading-tight tracking-tight">
+      See it work.
+    </h1>
+    <p class="text-lg leading-relaxed text-contrast-500">
+      Live surfaces for this initiative — deployed prototypes, demos, and design
+      oracles you can open and click through. Surfaces are declared in
+      <code class="font-mono text-[14px]">blueprint.yml</code> under
+      <code class="font-mono text-[14px]">portal.surfaces</code>.
+    </p>
+  </header>
+
+  <TryNav currentPath={Astro.url.pathname} />
+
+  {features.surfaces ? (
+    <section class="grid gap-8">
+      {SURFACES.map((surface) => (
+        <article aria-labelledby={`surface-${surface.id}-heading`} class="flex flex-col gap-3">
+          <header class="flex items-end justify-between gap-3">
+            <div>
+              <h2
+                id={`surface-${surface.id}-heading`}
+                class="font-heading text-xl font-semibold tracking-tight"
+              >
+                {surface.label || surface.id}
+              </h2>
+              {surface.note && (
+                <p class="mt-1 max-w-3xl text-sm text-contrast-500">{surface.note}</p>
+              )}
+            </div>
+            <StatusBadge status={surface.status} />
+          </header>
+          <LiveIframe src={surface.src} title={surface.label || surface.id} height="540px" />
+        </article>
+      ))}
+    </section>
+  ) : (
+    <section class="rounded-lg border border-contrast-200 bg-contrast-100/30 p-5">
+      <p class="text-sm leading-relaxed text-contrast-500">
+        No live demo is configured for this initiative. Add entries under
+        <code class="font-mono text-[13px]">portal.surfaces</code> in
+        <code class="font-mono text-[13px]">blueprint.yml</code> — each with an
+        <code class="font-mono text-[13px]">id</code>,
+        <code class="font-mono text-[13px]">label</code>,
+        <code class="font-mono text-[13px]">src</code>, and optional
+        <code class="font-mono text-[13px]">status</code> — to embed deployed
+        surfaces here.
+      </p>
+    </section>
+  )}
+</Layout>

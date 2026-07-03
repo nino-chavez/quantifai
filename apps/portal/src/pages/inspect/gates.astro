@@ -1,0 +1,135 @@
+---
+import Layout from '@/layouts/Layout.astro';
+import { InspectNav } from '@/components/InspectNav';
+import { GateMatrix } from '@/components/SubstrateDashboards';
+import { loadGateStatus, loadAttestations } from '@/lib/status';
+import { portalConfig } from '@/lib/portal-config';
+
+const cfg = portalConfig();
+const gatesEnabled = cfg.features.gates;
+const gates = loadGateStatus();
+const atts = loadAttestations();
+
+// Generic gate labels, if the consumer configured them in blueprint.yml's
+// portal.gates.gate_labels. Empty at Tier-0 — the legend below collapses to the
+// color key alone, and the numbered-gate strip hides.
+const gateLabels = cfg.gates.gateLabels;
+
+const epicsFullyGated = gates.epics.filter((e) =>
+  Object.values(e.gates).every((c) => c === 'green' || c === 'gray'),
+).length;
+const dataAsOf = gates.dataAsOf ? gates.dataAsOf.slice(0, 16).replace('T', ' ') + 'Z' : '';
+const dataCommit = gates.dataCommit ? gates.dataCommit.slice(0, 8) : '';
+---
+<!--
+  REPLACE_FOR_PROJECT — this surface carries example/placeholder content from the
+  Blueprint reference template. Populate it from your initiative's deliverables (or
+  delete it) before sharing with stakeholders. The portal-initiative-conformance-
+  reviewer treats this banner as a block — resolve before sharing.
+-->
+<Layout title="Gate status — Inspect" description="Per-epic gate compliance matrix.">
+  <header class="mb-6 max-w-3xl">
+    <p class="mb-2 font-mono text-xs uppercase tracking-wide text-contrast-500">Inspect → Gate status</p>
+    <h1 class="mb-3 font-heading text-4xl font-semibold leading-tight tracking-tight">
+      Gate status.
+    </h1>
+    <p class="text-lg leading-relaxed text-contrast-500">
+      Readiness scorecard for the per-epic gate Definition-of-Done. Each gate is a two-stage check: <strong>Stage 1</strong> — the automated check passes (mechanical, re-derived on every push); <strong>Stage 2</strong> — a human attests the artifacts are real quality (a checkbox bound to the commit it was made against). A gate is green only when both stages pass; if files change after the attestation, the checkbox auto-invalidates and the gate falls back to yellow until re-checked.
+    </p>
+    {gatesEnabled && (
+      <>
+        <p class="mt-2 font-mono text-xs text-contrast-400">
+          {dataAsOf && (
+            <>
+              Mechanical re-derived {dataAsOf}
+              {dataCommit && (<> @ <code class="font-mono">{dataCommit}</code></>)}
+              {' · '}
+            </>
+          )}
+          {gates.latestAuditDate && (<>last attestation {gates.latestAuditDate} · </>)}
+          {epicsFullyGated} / {gates.epics.length} epics fully gated
+        </p>
+        <div class="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4 max-w-3xl">
+          <div class="rounded border border-success/30 bg-success-background/30 px-2 py-1.5">
+            <p class="font-mono text-[10px] uppercase text-success-foreground">Both stages</p>
+            <p class="font-mono text-sm font-semibold">{gates.stageCounts.mechanical_passing_attested}</p>
+          </div>
+          <div class="rounded border border-warning/30 bg-warning-background/30 px-2 py-1.5">
+            <p class="font-mono text-[10px] uppercase text-warning-foreground">Mech ✓, awaiting attestation</p>
+            <p class="font-mono text-sm font-semibold">{gates.stageCounts.mechanical_passing_unattested}</p>
+          </div>
+          <div class="rounded border border-warning/30 bg-warning-background/30 px-2 py-1.5">
+            <p class="font-mono text-[10px] uppercase text-warning-foreground">↻ Needs re-attestation</p>
+            <p class="font-mono text-sm font-semibold">{gates.stageCounts.mechanical_passing_stale_attestation}</p>
+          </div>
+          <div class="rounded border border-error/30 bg-error-background/30 px-2 py-1.5">
+            <p class="font-mono text-[10px] uppercase text-error-foreground">Mech ✗</p>
+            <p class="font-mono text-sm font-semibold">{gates.stageCounts.mechanical_failing}</p>
+          </div>
+        </div>
+      </>
+    )}
+  </header>
+
+  <InspectNav currentPath={Astro.url.pathname} />
+
+  {!gatesEnabled ? (
+    <section class="rounded-lg border border-dashed border-contrast-300 bg-background p-5">
+      <p class="mb-1 font-mono text-[10px] uppercase tracking-wide text-contrast-400">Not configured</p>
+      <p class="text-sm leading-relaxed text-contrast-500">
+        Gate tracking is not configured for this initiative. Enable it in <code class="font-mono text-xs">blueprint.yml</code> under <code class="font-mono text-xs">portal.gates</code> (set <code class="font-mono text-xs">enabled: true</code>, wire <code class="font-mono text-xs">epics_source</code>, and supply per-gate <code class="font-mono text-xs">gate_labels</code>) once a consumer-side state-derive emits per-epic gate results.
+      </p>
+    </section>
+  ) : (
+    <>
+      {/* Color + gate legend strip — color key always; numbered gate strip only when labels configured */}
+      <section class="mb-6 rounded-lg border border-contrast-200 bg-background p-4">
+        <div class="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-contrast-500">
+          <span class="inline-flex items-center gap-1.5">
+            <span class="inline-block h-2.5 w-2.5 rounded-full bg-success"></span>Green — Stage 1 + Stage 2 both pass
+          </span>
+          <span class="inline-flex items-center gap-1.5">
+            <span class="inline-block h-2.5 w-2.5 rounded-full bg-warning"></span>Yellow — Stage 1 passes; Stage 2 unchecked or stale
+          </span>
+          <span class="inline-flex items-center gap-1.5">
+            <span class="inline-block h-2.5 w-2.5 rounded-full bg-error"></span>Red — Stage 1 fails (artifacts missing)
+          </span>
+          <span class="inline-flex items-center gap-1.5">
+            <span class="inline-block h-2.5 w-2.5 rounded-full bg-contrast-200"></span>Gray — N/A
+          </span>
+          <span class="inline-flex items-center gap-1.5 ml-2 border-l border-contrast-200 pl-3">
+            <span class="text-warning-foreground">↻</span> needs re-attestation (files changed since checkbox)
+          </span>
+        </div>
+        {gateLabels.length > 0 && (
+          <p class="mt-3 text-xs leading-relaxed text-contrast-500">
+            <span class="font-semibold text-foreground">Gates:</span>
+            {gateLabels.map((label, i) => (
+              <>
+                {' '}<span class="font-mono text-[11px]">{i + 1}</span> {label}{i < gateLabels.length - 1 ? ' ·' : '.'}
+              </>
+            ))}
+            {' '}Hover any cell for mechanical-vs-operator detail.
+          </p>
+        )}
+      </section>
+
+      {/* Attestations callout — engineering readiness vs human attestations split */}
+      <aside class="mb-6 rounded-lg border border-contrast-200 border-l-4 border-l-warning bg-background p-4">
+        <p class="text-sm leading-relaxed text-foreground">
+          <span class="font-semibold">Human attestations tracked separately.</span> This dashboard tracks engineering readiness (auto-derived per epic). Readiness items requiring human judgment instead of code live on the <a href="/inspect/attestations" class="text-brand hover:underline">attestations</a> page.
+        </p>
+        {atts.total > 0 && (
+          <p class="mt-2 font-mono text-xs text-contrast-500">
+            {atts.total} attestations open ·
+            {' '}{atts.byStatus.pending} pending sign-off.
+          </p>
+        )}
+      </aside>
+
+      <GateMatrix gates={gates} />
+    </>
+  )}
+</Layout>
+</content>
+</invoke>

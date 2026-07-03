@@ -1,0 +1,58 @@
+---
+import Layout from '@/layouts/Layout.astro';
+import { RoadmapView } from '@/components/RoadmapView';
+import { loadBoard, loadEpicProgress, loadBuildOrder } from '@/lib/derived';
+import { portalConfig } from '@/lib/portal-config';
+
+const cfg = portalConfig();
+const enabled = cfg.features.roadmap; // board || buildOrder
+
+const buildOrder = enabled ? loadBuildOrder() : null;
+const board = enabled ? loadBoard() : null;
+const epicProgress = enabled ? loadEpicProgress() : null;
+
+// Footer provenance — whichever source carries a timestamp.
+const generatedAt =
+  buildOrder?.generatedAt || board?.generatedAt || epicProgress?.generatedAt || '';
+const commit = board?.commit || epicProgress?.sourceCommit || '';
+---
+<Layout title="Roadmap" description="What's in flight, what's queued, what's coming.">
+  <header class="mb-10 max-w-3xl">
+    <p class="mb-2 font-mono text-xs uppercase tracking-wide text-brand">Roadmap</p>
+    <h1 class="mb-3 font-heading text-4xl font-semibold leading-tight tracking-tight">
+      Where it's going.
+    </h1>
+    <p class="text-lg leading-relaxed text-contrast-500">
+      Forward-looking view of open work — the dependency-ordered build ladder when one is
+      wired, otherwise the coordination-board horizon, phase bands, and epic activity.
+    </p>
+  </header>
+
+  {enabled ? (
+    <RoadmapView
+      buildOrder={buildOrder!}
+      board={board!}
+      epicProgress={epicProgress!}
+      phaseLabels={cfg.board.phases}
+      repoUrl={cfg.repoUrl}
+    />
+  ) : (
+    <div class="rounded-lg border border-contrast-200 bg-contrast-100/30 p-6">
+      <p class="font-mono text-[11px] uppercase tracking-wide text-contrast-400 mb-2">
+        Not configured for this initiative
+      </p>
+      <p class="text-sm leading-relaxed text-contrast-500">
+        The roadmap populates once your coordination board or build-order source is wired.
+        Point <code class="font-mono text-xs">portal.sources.build_order</code> or
+        <code class="font-mono text-xs">portal.sources.board</code> in
+        <code class="font-mono text-xs">blueprint.yml</code> at a generated plan, then rebuild.
+      </p>
+    </div>
+  )}
+
+  {enabled && generatedAt && (
+    <footer class="mt-12 font-mono text-[10px] uppercase tracking-wide text-contrast-400">
+      derived @ {generatedAt.slice(0, 10)}{commit && ` · commit ${commit.slice(0, 8)}`}
+    </footer>
+  )}
+</Layout>

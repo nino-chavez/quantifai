@@ -1,0 +1,19 @@
+{
+  "name": "@blueprint/gate-derive",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Generic gate-derivation substrate for the Blueprint Pattern A portal. Provides the 10-gate Epic-DoD model + state/attestation/cross-cutting derivation as substrate-degrading code: with no project data sources configured it returns empty structures so the portal builds green at Tier 0. The gate model + labels are parameters, not marketplace constants.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "files": [
+    "src"
+  ],
+  "keywords": [
+    "blueprint",
+    "gate-derive",
+    "epic-dod",
+    "substrate"
+  ]
+}

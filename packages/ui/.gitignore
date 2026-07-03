@@ -1,0 +1,8 @@
+# Storybook build output
+dist-story/
+
+# Vite/TSC build outputs (if added later)
+dist/
+
+# Storybook caches
+.storybook-static/

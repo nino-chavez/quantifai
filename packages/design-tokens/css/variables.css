@@ -1,0 +1,112 @@
+/**
+ * @blueprint/design-tokens — CSS variables
+ *
+ * Canonical surface for tokens. Every other consumer (Tailwind preset,
+ * Svelte components, vanilla HTML in apps/demos) reads through these.
+ *
+ * Color uses OKLCH for perceptually uniform lightness. Derived backgrounds
+ * and foregrounds use `oklch(from var(...) L C h / alpha)` so re-theming
+ * is a single source-color change.
+ *
+ * Namespace: --quan-* (quantifai-next). Never collides with merchant
+ * storefront tokens or BC platform tokens.
+ */
+
+:root {
+  /* -------- Color (OKLCH triplets: lightness chroma hue) -------- */
+
+  /* Brand — teal/cyan; distinct from BC blue, signals "data/subscriptions" */
+  --quan-brand-lch:            0.55 0.13 215;
+  --quan-brand-background-lch: 0.97 0.03 215;
+  --quan-brand-foreground-lch: 0.28 0.06 215;
+
+  /* Semantic state */
+  --quan-success-lch:            0.72 0.17 152;
+  --quan-success-background-lch: 0.97 0.04 152;
+  --quan-success-foreground-lch: 0.32 0.09 152;
+
+  --quan-error-lch:            0.62 0.22 28;
+  --quan-error-background-lch: 0.96 0.04 28;
+  --quan-error-foreground-lch: 0.32 0.12 28;
+
+  --quan-warning-lch:            0.78 0.16 78;
+  --quan-warning-background-lch: 0.97 0.04 78;
+  --quan-warning-foreground-lch: 0.36 0.10 78;
+
+  --quan-info-lch:            0.62 0.13 245;
+  --quan-info-background-lch: 0.97 0.03 245;
+  --quan-info-foreground-lch: 0.32 0.08 245;
+
+  /* Neutral surfaces */
+  --quan-background-lch: 1 0 0;
+  --quan-foreground-lch: 0.16 0 0;
+
+  /* Neutral scale — 100 lightest, 500 darkest before foreground */
+  --quan-contrast-100-lch: 0.96 0 0;
+  --quan-contrast-200-lch: 0.88 0 0;
+  --quan-contrast-300-lch: 0.78 0 0;
+  --quan-contrast-400-lch: 0.62 0 0;
+  --quan-contrast-500-lch: 0.42 0 0;
+
+  /* -------- Typography -------- */
+  --quan-font-heading: 'Inter Display', 'Inter', system-ui, -apple-system, sans-serif;
+  --quan-font-body:    'Inter', system-ui, -apple-system, sans-serif;
+  --quan-font-mono:    'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+
+  /* -------- Motion -------- */
+  --quan-duration-instant:    100ms;
+  --quan-duration-fast:       150ms;
+  --quan-duration-normal:     200ms;
+  --quan-duration-slow:       300ms;
+  --quan-duration-deliberate: 500ms;
+
+  --quan-easing-standard: cubic-bezier(0.4, 0, 0.2, 1);
+  --quan-easing-decel:    cubic-bezier(0, 0, 0.2, 1);
+  --quan-easing-accel:    cubic-bezier(0.4, 0, 1, 1);
+  --quan-easing-spring:   cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  /* -------- Focus rings -------- */
+  --quan-focus-ring-width:  2px;
+  --quan-focus-ring-offset: 2px;
+  --quan-focus-ring-color:  oklch(var(--quan-brand-lch));
+
+  /* -------- Elevation -------- */
+  --quan-shadow-sm: 0 1px 2px 0 oklch(0 0 0 / 0.04);
+  --quan-shadow-md: 0 4px 8px -2px oklch(0 0 0 / 0.08), 0 2px 4px -2px oklch(0 0 0 / 0.04);
+  --quan-shadow-lg: 0 12px 24px -8px oklch(0 0 0 / 0.10), 0 4px 8px -4px oklch(0 0 0 / 0.06);
+  --quan-shadow-xl: 0 24px 48px -12px oklch(0 0 0 / 0.14);
+}
+
+/*
+ * Theme = light-mode-first, explicit-opt-in only.
+ *
+ * Dark-mode auto-flip (@media prefers-color-scheme) was removed
+ * 2026-05-20 — the lightness-inversion approach didn't carry the
+ * editorial register and produced an undesigned dark surface.
+ *
+ * Surfaces that explicitly opt in to dark via data-theme="dark"
+ * still get the override block below. A deliberate dark-mode design
+ * pass (correct chroma curves, separate contrast ladder, motion
+ * adjustments) belongs in the Slice 7 brand-identity beat — not as
+ * an automatic side-effect of OS preference.
+ */
+
+[data-theme="light"] {
+  --quan-background-lch: 1 0 0;
+  --quan-foreground-lch: 0.16 0 0;
+  --quan-contrast-100-lch: 0.96 0 0;
+  --quan-contrast-200-lch: 0.88 0 0;
+  --quan-contrast-300-lch: 0.78 0 0;
+  --quan-contrast-400-lch: 0.62 0 0;
+  --quan-contrast-500-lch: 0.42 0 0;
+}
+
+[data-theme="dark"] {
+  --quan-background-lch: 0.16 0 0;
+  --quan-foreground-lch: 0.96 0 0;
+  --quan-contrast-100-lch: 0.22 0 0;
+  --quan-contrast-200-lch: 0.30 0 0;
+  --quan-contrast-300-lch: 0.40 0 0;
+  --quan-contrast-400-lch: 0.56 0 0;
+  --quan-contrast-500-lch: 0.74 0 0;
+}

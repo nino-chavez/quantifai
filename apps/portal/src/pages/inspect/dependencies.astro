@@ -1,0 +1,75 @@
+---
+import Layout from '@/layouts/Layout.astro';
+import { InspectNav } from '@/components/InspectNav';
+import { DependencyView } from '@/components/SubstrateDashboards';
+import { DependencyGraph } from '@/components/DependencyGraph';
+import {
+  loadDependencies,
+  loadDepGraph,
+  loadEpicCompletions,
+} from '@/lib/status';
+import { portalConfig } from '@/lib/portal-config';
+
+const cfg = portalConfig();
+// The DAG view needs dep_graph; the top-blockers view needs proposals. Either
+// source on its own is enough to show this page; both off → empty state.
+const hasDepGraph = cfg.features.depGraph;
+const hasDeps = cfg.features.dependencies;
+const hasAny = hasDepGraph || hasDeps;
+
+const deps = loadDependencies();
+const dag = loadDepGraph();
+const completionsMap = loadEpicCompletions();
+const completions = Object.fromEntries(completionsMap);
+const generatedAt = dag.generated_at ? dag.generated_at.replace('T', ' ').slice(0, 16) + 'Z' : '';
+---
+<!--
+  REPLACE_FOR_PROJECT — this surface carries example/placeholder content from the
+  Blueprint reference template. Populate it from your initiative's deliverables (or
+  delete it) before sharing with stakeholders. The portal-initiative-conformance-
+  reviewer treats this banner as a block — resolve before sharing.
+-->
+<Layout title="Dependencies — Inspect" description="Epic-level dependency DAG + top blockers.">
+  <header class="mb-6 max-w-3xl">
+    <p class="mb-2 font-mono text-xs uppercase tracking-wide text-contrast-500">Inspect → Dependencies</p>
+    <h1 class="mb-3 font-heading text-4xl font-semibold leading-tight tracking-tight">
+      Dependencies.
+    </h1>
+    <p class="text-lg leading-relaxed text-contrast-500">
+      Epic-level dependency DAG, wired by each proposal's <code class="rounded bg-contrast-100/60 px-1 font-mono text-[12px]">blocked_by</code> metadata. Columns are topological depth; the highlighted ring marks the critical path (longest non-shipped chain). For what's dispatchable now, see <a class="text-brand hover:underline" href="/roadmap">Roadmap</a>.
+    </p>
+  </header>
+
+  <InspectNav currentPath={Astro.url.pathname} />
+
+  {!hasAny ? (
+    <section class="rounded-lg border border-dashed border-contrast-300 bg-background p-5">
+      <p class="mb-1 font-mono text-[10px] uppercase tracking-wide text-contrast-400">Not configured</p>
+      <p class="text-sm leading-relaxed text-contrast-500">
+        Dependency tracking is not configured for this initiative. Point <code class="font-mono text-xs">portal.sources.dep_graph</code> (the topological DAG) and/or <code class="font-mono text-xs">portal.sources.proposals</code> (the open-work blocker graph) in <code class="font-mono text-xs">blueprint.yml</code> at their derive outputs to populate this view.
+      </p>
+    </section>
+  ) : (
+    <>
+      {hasDepGraph && (
+        <DependencyGraph
+          client:load
+          data={dag}
+          completions={completions}
+          generatedAt={generatedAt}
+        />
+      )}
+
+      {hasDeps && (
+        <section class="mt-10">
+          <h2 class="mb-3 font-heading text-xl font-semibold tracking-tight">Top blockers</h2>
+          <p class="mb-4 text-sm leading-relaxed text-contrast-500">
+            Slice-level detail beneath the epic DAG above. These are the individual open proposals whose closure would unblock the largest number of other open work items.
+          </p>
+          <DependencyView deps={deps} />
+        </section>
+      )}
+    </>
+  )}
+</Layout>
+</content>

@@ -1,0 +1,76 @@
+{
+  "name": "@blueprint/ui",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Shared React component library for the Blueprint Pattern A portal — monolith + composable dual API, consumed by apps/portal.",
+  "type": "module",
+  "sideEffects": [
+    "**/*.css"
+  ],
+  "scripts": {
+    "story": "storybook dev -p 6006",
+    "build-story": "storybook build -o dist-story",
+    "typecheck": "tsc --noEmit"
+  },
+  "exports": {
+    ".": "./src/index.ts",
+    "./styles": "./src/styles.css",
+    "./tailwind": "./tailwind.config.ts",
+    "./lib/cn": "./src/lib/cn.ts",
+    "./button": "./src/components/button/index.ts",
+    "./badge": "./src/components/badge/index.ts",
+    "./alert": "./src/components/alert/index.ts",
+    "./card": "./src/components/card/index.ts",
+    "./tabs": "./src/components/tabs/index.ts",
+    "./modal": "./src/components/modal/index.ts",
+    "./swimlane": "./src/components/swimlane/index.ts",
+    "./task-bar": "./src/components/task-bar/index.ts",
+    "./dependency-arrow": "./src/components/dependency-arrow/index.ts",
+    "./shell": "./src/components/shell/index.ts",
+    "./navbar": "./src/components/navbar/index.ts",
+    "./audience-switcher": "./src/components/audience-switcher/index.ts",
+    "./lane-card": "./src/components/lane-card/index.ts",
+    "./status-badge": "./src/components/status-badge/index.ts",
+    "./live-iframe": "./src/components/live-iframe/index.ts"
+  },
+  "dependencies": {
+    "@blueprint/design-tokens": "*",
+    "@radix-ui/react-slot": "^1.2.0",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "lucide-react": "^0.471.0",
+    "tailwind-merge": "^3.0.0"
+  },
+  "peerDependencies": {
+    "@radix-ui/react-dialog": "^1.1.0",
+    "@radix-ui/react-tabs": "^1.1.0",
+    "react": "^18.0.0 || ^19.0.0",
+    "react-dom": "^18.0.0 || ^19.0.0",
+    "tailwindcss": "^3.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@radix-ui/react-dialog": {
+      "optional": true
+    },
+    "@radix-ui/react-tabs": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@radix-ui/react-dialog": "^1.1.15",
+    "@radix-ui/react-tabs": "^1.1.13",
+    "@storybook/addon-a11y": "^9.1.20",
+    "@storybook/addon-docs": "^9.1.20",
+    "@storybook/react-vite": "^9.1.20",
+    "@types/react": "^19.2.15",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^5.2.0",
+    "autoprefixer": "^10.5.0",
+    "postcss": "^8.5.15",
+    "react": "^19.2.6",
+    "react-dom": "^19.2.6",
+    "storybook": "^9.1.20",
+    "tailwindcss": "^3.4.19",
+    "vite": "^7.3.3"
+  }
+}

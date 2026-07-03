@@ -1,0 +1,70 @@
+---
+import Layout from '@/layouts/Layout.astro';
+import { HomeLanes, normalizeLanes } from '@/components/HomeLanes';
+import { HeroStats } from '@/components/HeroStats';
+import { loadState, loadBoard, loadAdrCount } from '@/lib/derived';
+import { portalConfig } from '@/lib/portal-config';
+
+const state = loadState();
+const board = loadBoard();
+const adrCount = loadAdrCount();
+
+const cfg = portalConfig();
+const features = cfg.features;
+
+// Lanes come from blueprint.yml's portal.home.lanes; normalizeLanes resolves
+// each entry against the canonical verb set + generic defaults and falls back
+// to the full default lane set when none are configured (Tier-0). Resolved here
+// (where portalConfig() can read the filesystem) and passed as a plain-data
+// prop to the client island.
+const lanes = normalizeLanes(cfg.home.lanes);
+
+// Hero copy comes from blueprint.yml's portal.home block; a fresh Tier-0 stamp
+// leaves these empty, so fall back to generic, project-agnostic defaults.
+const eyebrow = cfg.home.heroEyebrow || 'The initiative portal';
+const headline = cfg.home.heroHeadline || 'One front door, every surface.';
+const subhead =
+  cfg.home.heroSubhead ||
+  'Strategy, demos, build docs, methodology, roadmap — every surface of this initiative on one shelf. Pick how you want to enter.';
+
+// The audience switcher reorders the lanes per viewer. Only mention it when at
+// least one substrate surface is live; otherwise the homepage is a static map.
+const showAudienceNote = features.state || features.board || features.surfaces;
+---
+<Layout
+  title="Portal"
+  description="Initiative portal — strategy, demos, build docs, methodology, and roadmap in one place."
+>
+  <section class="mb-12 max-w-2xl">
+    <p class="mb-3 inline-flex items-center gap-2 font-mono text-xs uppercase tracking-wide text-contrast-400">
+      <span class="inline-block h-1.5 w-1.5 rounded-full bg-brand"></span>
+      {eyebrow}
+    </p>
+    <h1 class="mb-4 font-heading text-5xl font-semibold leading-tight tracking-tight text-foreground">
+      {headline}
+    </h1>
+    <p class="text-lg leading-relaxed text-contrast-500">
+      {subhead}
+    </p>
+  </section>
+
+  <HeroStats
+    state={state}
+    board={board}
+    adrCount={adrCount}
+    showState={features.state}
+    showBoard={features.board}
+    decisionsDir={cfg.decisions.dir}
+  />
+
+  <HomeLanes lanes={lanes} client:load />
+
+  {showAudienceNote && (
+    <section class="mt-16 rounded-lg border border-contrast-200 bg-contrast-100/30 p-6">
+      <h2 class="mb-2 font-heading text-xl font-semibold tracking-tight">Lane order shifts by audience</h2>
+      <p class="text-sm leading-relaxed text-contrast-500">
+        The pills in the top-right reorder the cards above for whoever's looking: <strong class="font-medium text-foreground">Executive</strong> leads with strategy and trajectory, <strong class="font-medium text-foreground">Evaluator</strong> (default) leads with proof and integration, <strong class="font-medium text-foreground">Engineering</strong> leads with methodology. The choice persists across pages.
+      </p>
+    </section>
+  )}
+</Layout>

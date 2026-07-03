@@ -1,0 +1,36 @@
+---
+import Layout from '@/layouts/Layout.astro';
+import { TryNav } from '@/components/TryNav';
+import { ScenarioList } from '@/components/ScenarioList';
+import { loadScenarios } from '@/lib/scenarios';
+import { portalConfig } from '@/lib/portal-config';
+
+const { features } = portalConfig();
+const scenarios = features.scenarios ? loadScenarios() : null;
+---
+<Layout title="Scenarios — Try" description="Guided click-path demos across the configured surfaces.">
+  <header class="mb-6 max-w-3xl">
+    <p class="mb-2 font-mono text-xs uppercase tracking-wide text-success">Try → Scenarios</p>
+    <h1 class="mb-3 font-heading text-4xl font-semibold leading-tight tracking-tight">
+      Guided scenarios.
+    </h1>
+    <p class="text-lg leading-relaxed text-contrast-500">
+      {scenarios
+        ? `${scenarios.scenarios.length} guided click-path scenarios with per-surface readiness — click to open the live surface.`
+        : 'Scripted click-path demos with per-surface readiness, sourced from the scenarios file configured for this initiative.'}
+    </p>
+  </header>
+  <TryNav currentPath={Astro.url.pathname} />
+  {scenarios ? (
+    <ScenarioList data={scenarios} />
+  ) : (
+    <section class="rounded-lg border border-contrast-200 bg-contrast-100/30 p-5">
+      <p class="text-sm leading-relaxed text-contrast-500">
+        No scenarios are configured for this initiative. Point
+        <code class="font-mono text-[13px]">portal.sources.scenarios</code> in
+        <code class="font-mono text-[13px]">blueprint.yml</code> at a scenarios
+        JSON file to surface guided click-path demos here.
+      </p>
+    </section>
+  )}
+</Layout>

@@ -1,0 +1,17 @@
+{
+  "_comment": "Project-level Blueprint imposition layer. Stamped into every initiative by blueprint-init so the SessionStart hook fires regardless of global ~/.claude config. The hook injects METHODOLOGY.md + variant-selection.md + portal-and-tier-ladder.md at session start. See METHODOLOGY-AMENDMENTS.md (2026-06-16, imposition-layer install gap).",
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/blueprint-session-start.py\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}

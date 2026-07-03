@@ -1,0 +1,45 @@
+---
+import Layout from '@/layouts/Layout.astro';
+import { InspectNav } from '@/components/InspectNav';
+import { AttestationList } from '@/components/SubstrateDashboards';
+import { loadAttestations } from '@/lib/status';
+import { portalConfig } from '@/lib/portal-config';
+
+const cfg = portalConfig();
+const hasAttestations = cfg.features.attestations;
+const atts = loadAttestations();
+const attestationsSource = cfg.sources.attestations;
+---
+<!--
+  REPLACE_FOR_PROJECT — this surface carries example/placeholder content from the
+  Blueprint reference template. Populate it from your initiative's deliverables (or
+  delete it) before sharing with stakeholders. The portal-initiative-conformance-
+  reviewer treats this banner as a block — resolve before sharing.
+-->
+<Layout title="Attestations — Inspect" description="Manual sign-offs and partner-track commitments.">
+  <header class="mb-6 max-w-3xl">
+    <p class="mb-2 font-mono text-xs uppercase tracking-wide text-contrast-500">Inspect → Attestations</p>
+    <h1 class="mb-3 font-heading text-4xl font-semibold leading-tight tracking-tight">
+      Attestations.
+    </h1>
+    <p class="text-lg leading-relaxed text-contrast-500">
+      Manual sign-offs and partner-track commitments — the readiness items that need human judgment rather than a mechanical check. Grouped by gating impact, most-blocking first.
+      {hasAttestations && attestationsSource && (
+        <> Source: <code class="font-mono text-xs">{attestationsSource}</code>.</>
+      )}
+    </p>
+  </header>
+  <InspectNav currentPath={Astro.url.pathname} />
+
+  {!hasAttestations ? (
+    <section class="rounded-lg border border-dashed border-contrast-300 bg-background p-5">
+      <p class="mb-1 font-mono text-[10px] uppercase tracking-wide text-contrast-400">Not configured</p>
+      <p class="text-sm leading-relaxed text-contrast-500">
+        Attestation tracking is not configured for this initiative. Point <code class="font-mono text-xs">portal.sources.attestations</code> in <code class="font-mono text-xs">blueprint.yml</code> at a manual-sign-off derive output (an <code class="font-mono text-xs">_attestations.json</code>) to populate this list.
+      </p>
+    </section>
+  ) : (
+    <AttestationList atts={atts} />
+  )}
+</Layout>
+</content>

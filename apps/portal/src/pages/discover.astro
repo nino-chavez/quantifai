@@ -1,0 +1,45 @@
+---
+import Layout from '@/layouts/Layout.astro';
+import { ExcerptCard } from '@/components/ExcerptCard';
+import { loadExcerpt } from '@/lib/content';
+import { portalConfig } from '@/lib/portal-config';
+
+const repoPrefix = portalConfig().repoUrl
+  ? `${portalConfig().repoUrl.replace(/\/$/, '')}/blob/main`
+  : undefined;
+
+// Discover cards are declared in blueprint.yml's portal.excerpts (card: 'discover').
+// Each config entry points at a doc heading; we resolve it at build time and skip
+// any that don't exist on disk. A fresh Tier-0 stamp has no excerpts → empty state.
+const cards = portalConfig()
+  .excerpts.filter((e) => e.card === 'discover')
+  .map((e) => ({ title: e.title, excerpt: loadExcerpt(e.path, e.heading) }))
+  .filter((c) => c.excerpt !== null);
+---
+<Layout title="Discover" description="North star, value proposition, the bet we are placing.">
+  <header class="mb-10 max-w-3xl">
+    <p class="mb-2 font-mono text-xs uppercase tracking-wide text-brand">Discover</p>
+    <h1 class="mb-3 font-heading text-4xl font-semibold leading-tight tracking-tight">
+      North star, value prop, the bet.
+    </h1>
+    <p class="text-lg leading-relaxed text-contrast-500">
+      Strategy and motivation — what we are building, who it is for, why now. Each card excerpts a canonical source document; click through to read the full section.
+    </p>
+  </header>
+
+  {cards.length > 0 ? (
+    <section class="mt-10 grid gap-4 md:grid-cols-2">
+      {cards.map((c) => (
+        <ExcerptCard title={c.title} excerpt={c.excerpt} repoPrefix={repoPrefix} />
+      ))}
+    </section>
+  ) : (
+    <section class="mt-10 rounded-lg border border-contrast-200 bg-contrast-100/30 p-5">
+      <p class="text-sm leading-relaxed text-contrast-500">
+        No discover excerpts are configured for this initiative. Add entries under
+        <code class="font-mono text-[13px]">portal.excerpts</code> (with <code class="font-mono text-[13px]">card: discover</code>)
+        in <code class="font-mono text-[13px]">blueprint.yml</code> to surface strategy excerpts here.
+      </p>
+    </section>
+  )}
+</Layout>

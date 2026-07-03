@@ -1,0 +1,30 @@
+{
+  "name": "@blueprint/design-tokens",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Canonical design tokens for the quantifai-next family — OKLCH color, type scale, spacing, motion. Framework-agnostic; consumed by React, Svelte, vanilla, and BC-embedded surfaces.",
+  "type": "module",
+  "exports": {
+    "./css": "./css/variables.css",
+    "./tailwind": {
+      "types": "./tailwind/preset.d.ts",
+      "default": "./tailwind/preset.js"
+    },
+    "./tokens": "./tokens.json",
+    "./types": {
+      "types": "./types/index.d.ts"
+    }
+  },
+  "files": [
+    "css",
+    "tailwind",
+    "tokens.json",
+    "types"
+  ],
+  "keywords": [
+    "design-tokens",
+    "oklch",
+    "tailwind",
+    "quantifai-next"
+  ]
+}

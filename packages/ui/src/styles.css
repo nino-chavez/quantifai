@@ -1,0 +1,38 @@
+/**
+ * @blueprint/ui — base styles
+ *
+ * Import once at the root of any consuming surface:
+ *
+ *   import '@blueprint/design-tokens/css';
+ *   import '@blueprint/ui/styles';
+ *
+ * Order matters: design tokens must load before ui styles so component
+ * declarations can resolve `--quan-*` variables.
+ */
+
+/* Type system baseline — body font + foreground color, set on the document */
+html {
+  font-family: var(--quan-font-body);
+  color: oklch(var(--quan-foreground-lch));
+  background: oklch(var(--quan-background-lch));
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--quan-font-heading);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+code, pre, kbd, samp {
+  font-family: var(--quan-font-mono);
+}
+
+/* Focus-visible default — components extend; never override `focus:outline-none`
+   without immediately replacing the focus indicator on `focus-visible:`. */
+:focus-visible {
+  outline: var(--quan-focus-ring-width) solid var(--quan-focus-ring-color);
+  outline-offset: var(--quan-focus-ring-offset);
+}

@@ -1,0 +1,733 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>State view — primitives preview</title>
+  <style>
+    /* ===== Design tokens — mirrored from @blueprint/design-tokens =====
+       Kept inline so this preview is fully self-contained (open via file://). */
+    :root {
+      --quan-brand-lch:            0.55 0.13 215;
+      --quan-brand-background-lch: 0.97 0.03 215;
+      --quan-brand-foreground-lch: 0.28 0.06 215;
+
+      --quan-success-lch:            0.72 0.17 152;
+      --quan-success-background-lch: 0.97 0.04 152;
+      --quan-success-foreground-lch: 0.32 0.09 152;
+
+      --quan-error-lch:            0.62 0.22 28;
+      --quan-error-background-lch: 0.96 0.04 28;
+      --quan-error-foreground-lch: 0.32 0.12 28;
+
+      --quan-warning-lch:            0.78 0.16 78;
+      --quan-warning-background-lch: 0.97 0.04 78;
+      --quan-warning-foreground-lch: 0.36 0.10 78;
+
+      --quan-info-lch:            0.62 0.13 245;
+      --quan-info-background-lch: 0.97 0.03 245;
+      --quan-info-foreground-lch: 0.32 0.08 245;
+
+      --quan-background-lch: 1 0 0;
+      --quan-foreground-lch: 0.16 0 0;
+
+      --quan-contrast-100-lch: 0.96 0 0;
+      --quan-contrast-200-lch: 0.88 0 0;
+      --quan-contrast-300-lch: 0.78 0 0;
+      --quan-contrast-400-lch: 0.62 0 0;
+      --quan-contrast-500-lch: 0.42 0 0;
+
+      --quan-font-heading: 'Inter Display', 'Inter', system-ui, sans-serif;
+      --quan-font-body:    'Inter', system-ui, sans-serif;
+      --quan-font-mono:    'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+
+      --quan-shadow-sm: 0 1px 2px 0 oklch(0 0 0 / 0.04);
+      --quan-shadow-md: 0 4px 8px -2px oklch(0 0 0 / 0.08), 0 2px 4px -2px oklch(0 0 0 / 0.04);
+    }
+
+    [data-theme="dark"] {
+      --quan-background-lch: 0.16 0 0;
+      --quan-foreground-lch: 0.96 0 0;
+      --quan-contrast-100-lch: 0.22 0 0;
+      --quan-contrast-200-lch: 0.30 0 0;
+      --quan-contrast-300-lch: 0.40 0 0;
+      --quan-contrast-400-lch: 0.56 0 0;
+      --quan-contrast-500-lch: 0.74 0 0;
+    }
+
+    /* ===== Base ===== */
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    body {
+      font-family: var(--quan-font-body);
+      color: oklch(var(--quan-foreground-lch));
+      background: oklch(var(--quan-background-lch));
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    /* ===== Page chrome ===== */
+    .page { max-width: 1180px; margin: 0 auto; padding: 48px 32px 96px; }
+
+    .page-header {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 24px;
+      padding-bottom: 24px;
+      border-bottom: 1px solid oklch(var(--quan-contrast-200-lch));
+      margin-bottom: 32px;
+    }
+    .page-header h1 {
+      margin: 0;
+      font-family: var(--quan-font-heading);
+      font-size: 28px;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+    }
+    .page-header .crumbs {
+      font-family: var(--quan-font-mono);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: oklch(var(--quan-contrast-400-lch));
+      margin-bottom: 6px;
+    }
+    .page-header p {
+      margin: 6px 0 0;
+      color: oklch(var(--quan-contrast-500-lch));
+      max-width: 56ch;
+      font-size: 14px;
+      line-height: 1.55;
+    }
+
+    .theme-toggle {
+      font-family: var(--quan-font-mono);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      background: transparent;
+      border: 1px solid oklch(var(--quan-contrast-300-lch));
+      color: oklch(var(--quan-foreground-lch));
+      padding: 6px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .theme-toggle:hover { border-color: oklch(var(--quan-brand-lch)); }
+
+    /* ===== Toolbar (zoom by phase / category filter) ===== */
+    .toolbar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 16px;
+      margin-bottom: 24px;
+      background: oklch(var(--quan-contrast-100-lch) / 0.6);
+      border: 1px solid oklch(var(--quan-contrast-200-lch));
+      border-radius: 8px;
+    }
+    .toolbar-label {
+      font-family: var(--quan-font-mono);
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: oklch(var(--quan-contrast-400-lch));
+      margin-right: 4px;
+    }
+    .pill-group { display: inline-flex; border-radius: 6px; overflow: hidden; border: 1px solid oklch(var(--quan-contrast-200-lch)); }
+    .pill {
+      font-family: var(--quan-font-body);
+      font-size: 12px;
+      padding: 5px 12px;
+      background: transparent;
+      border: 0;
+      cursor: pointer;
+      color: oklch(var(--quan-contrast-500-lch));
+      border-right: 1px solid oklch(var(--quan-contrast-200-lch));
+    }
+    .pill:last-child { border-right: 0; }
+    .pill[aria-pressed="true"] {
+      background: oklch(var(--quan-brand-lch));
+      color: oklch(var(--quan-brand-background-lch));
+    }
+    .spacer { flex: 1; }
+    .summary {
+      font-family: var(--quan-font-mono);
+      font-size: 11px;
+      color: oklch(var(--quan-contrast-500-lch));
+      display: inline-flex;
+      gap: 12px;
+    }
+    .summary strong { font-weight: 600; color: oklch(var(--quan-foreground-lch)); }
+
+    /* ===== Surface card (groups swimlanes by epic / scope) ===== */
+    .surface {
+      border: 1px solid oklch(var(--quan-contrast-200-lch));
+      border-radius: 12px;
+      overflow: hidden;
+      background: oklch(var(--quan-background-lch));
+      margin-bottom: 28px;
+      box-shadow: var(--quan-shadow-sm);
+    }
+    .surface-header {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 16px 20px;
+      border-bottom: 1px solid oklch(var(--quan-contrast-200-lch));
+      background: oklch(var(--quan-contrast-100-lch) / 0.4);
+    }
+    .surface-header h2 {
+      margin: 0;
+      font-family: var(--quan-font-heading);
+      font-size: 16px;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+    }
+    .surface-header .meta {
+      font-family: var(--quan-font-mono);
+      font-size: 11px;
+      color: oklch(var(--quan-contrast-400-lch));
+    }
+
+    /* ===== Swimlane ===== */
+    .swimlane {
+      display: grid;
+      grid-template-columns: 12rem 1fr;
+      gap: 0 16px;
+      padding: 12px 0;
+      border-top: 1px solid oklch(var(--quan-contrast-200-lch));
+      position: relative;
+    }
+    .swimlane:first-of-type { border-top: 0; }
+    .swimlane:nth-of-type(even) { background: oklch(var(--quan-contrast-100-lch) / 0.35); }
+
+    .swimlane-rail {
+      padding-left: 20px;
+      padding-right: 4px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .swimlane-rail .label {
+      font-size: 13px;
+      font-weight: 600;
+      line-height: 1.25;
+      color: oklch(var(--quan-foreground-lch));
+    }
+    .swimlane-rail .sublabel {
+      font-family: var(--quan-font-mono);
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: oklch(var(--quan-contrast-400-lch));
+    }
+    .swimlane-rail .counts {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      margin-top: 4px;
+    }
+    .count {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-family: var(--quan-font-mono);
+      font-size: 10px;
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-variant-numeric: tabular-nums;
+    }
+    .count[data-status="compliant"]    { background: oklch(var(--quan-success-lch) / 0.15); color: oklch(var(--quan-success-foreground-lch)); }
+    .count[data-status="partial"]      { background: oklch(var(--quan-warning-lch) / 0.15); color: oklch(var(--quan-warning-foreground-lch)); }
+    .count[data-status="non-compliant"]{ background: oklch(var(--quan-error-lch) / 0.15);   color: oklch(var(--quan-error-foreground-lch)); }
+    .count[data-status="manual-review"]{ background: oklch(var(--quan-info-lch) / 0.15);    color: oklch(var(--quan-info-foreground-lch)); }
+
+    .swimlane-track {
+      display: flex;
+      flex-wrap: wrap;
+      align-content: flex-start;
+      gap: 6px;
+      padding-right: 20px;
+    }
+
+    /* ===== TaskBar ===== */
+    .task-bar {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      height: 36px;
+      padding: 0 10px 0 14px;
+      font-size: 12px;
+      font-weight: 500;
+      border-radius: 6px;
+      border: 1px solid;
+      overflow: hidden;
+      cursor: pointer;
+      transition: box-shadow 150ms cubic-bezier(0.4, 0, 0.2, 1),
+                  transform 150ms cubic-bezier(0.4, 0, 0.2, 1);
+      max-width: 320px;
+    }
+    .task-bar::before {
+      content: "";
+      position: absolute;
+      inset-block: 0;
+      left: 0;
+      width: 4px;
+    }
+    .task-bar:hover { box-shadow: var(--quan-shadow-sm); transform: translateY(-1px); }
+    .task-bar:focus-visible { outline: 2px solid oklch(var(--quan-brand-lch)); outline-offset: 2px; }
+
+    .task-bar .progress-fill {
+      position: absolute;
+      inset-block: 0;
+      left: 0;
+      background: oklch(var(--quan-foreground-lch) / 0.06);
+      pointer-events: none;
+    }
+
+    .task-bar .label { position: relative; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .task-bar .meta  {
+      position: relative;
+      margin-left: auto;
+      font-family: var(--quan-font-mono);
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      opacity: 0.7;
+    }
+
+    .task-bar[data-status="compliant"] {
+      background: oklch(var(--quan-success-background-lch));
+      color: oklch(var(--quan-success-foreground-lch));
+      border-color: oklch(var(--quan-success-lch) / 0.4);
+    }
+    .task-bar[data-status="compliant"]::before    { background: oklch(var(--quan-success-lch)); }
+
+    .task-bar[data-status="partial"] {
+      background: oklch(var(--quan-warning-background-lch));
+      color: oklch(var(--quan-warning-foreground-lch));
+      border-color: oklch(var(--quan-warning-lch) / 0.4);
+    }
+    .task-bar[data-status="partial"]::before      { background: oklch(var(--quan-warning-lch)); }
+
+    .task-bar[data-status="non-compliant"] {
+      background: oklch(var(--quan-error-background-lch));
+      color: oklch(var(--quan-error-foreground-lch));
+      border-color: oklch(var(--quan-error-lch) / 0.4);
+    }
+    .task-bar[data-status="non-compliant"]::before{ background: oklch(var(--quan-error-lch)); }
+
+    .task-bar[data-status="manual-review"] {
+      background: oklch(var(--quan-info-background-lch));
+      color: oklch(var(--quan-info-foreground-lch));
+      border-color: oklch(var(--quan-info-lch) / 0.4);
+    }
+    .task-bar[data-status="manual-review"]::before{ background: oklch(var(--quan-info-lch)); }
+
+    .task-bar[data-status="neutral"] {
+      background: oklch(var(--quan-contrast-100-lch));
+      color: oklch(var(--quan-contrast-500-lch));
+      border-color: oklch(var(--quan-contrast-200-lch));
+    }
+    .task-bar[data-status="neutral"]::before      { background: oklch(var(--quan-contrast-300-lch)); }
+
+    /* ===== Detail popover (frappe-gantt-style detail panel on hover) ===== */
+    .popover-host { position: relative; display: inline-block; }
+    .popover {
+      position: absolute;
+      left: 0;
+      top: calc(100% + 6px);
+      z-index: 10;
+      width: 340px;
+      padding: 14px 16px;
+      border: 1px solid oklch(var(--quan-contrast-200-lch));
+      background: oklch(var(--quan-background-lch));
+      border-radius: 8px;
+      box-shadow: var(--quan-shadow-md);
+      opacity: 0;
+      pointer-events: none;
+      transform: translateY(-4px);
+      transition: all 150ms cubic-bezier(0, 0, 0.2, 1);
+    }
+    .popover-host:hover .popover,
+    .popover-host:focus-within .popover {
+      opacity: 1;
+      transform: translateY(0);
+      pointer-events: auto;
+    }
+    .popover h4 {
+      margin: 0 0 6px;
+      font-family: var(--quan-font-heading);
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+    }
+    .popover .pop-id {
+      font-family: var(--quan-font-mono);
+      font-size: 10px;
+      color: oklch(var(--quan-contrast-400-lch));
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-bottom: 8px;
+    }
+    .popover .pop-row {
+      display: grid;
+      grid-template-columns: 70px 1fr;
+      gap: 8px;
+      font-size: 12px;
+      line-height: 1.45;
+      padding: 4px 0;
+      border-top: 1px dashed oklch(var(--quan-contrast-200-lch));
+    }
+    .popover .pop-row:first-of-type { border-top: 0; }
+    .popover .pop-row dt {
+      font-family: var(--quan-font-mono);
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: oklch(var(--quan-contrast-400-lch));
+      align-self: start;
+      padding-top: 2px;
+    }
+    .popover .pop-row dd {
+      margin: 0;
+      color: oklch(var(--quan-contrast-500-lch));
+      font-family: var(--quan-font-mono);
+      font-size: 11px;
+      word-break: break-word;
+    }
+
+    /* ===== Dependency arrow demo wrapper ===== */
+    .deps-demo {
+      position: relative;
+      padding: 32px;
+      background:
+        repeating-linear-gradient(
+          0deg,
+          oklch(var(--quan-contrast-100-lch) / 0.3) 0,
+          oklch(var(--quan-contrast-100-lch) / 0.3) 1px,
+          transparent 1px,
+          transparent 32px
+        );
+      border-top: 1px solid oklch(var(--quan-contrast-200-lch));
+    }
+    .deps-demo h3 {
+      margin: 0 0 18px;
+      font-family: var(--quan-font-heading);
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+      color: oklch(var(--quan-contrast-500-lch));
+    }
+    .deps-row { display: flex; align-items: center; gap: 64px; margin-bottom: 14px; }
+
+    /* ===== Footer note ===== */
+    footer {
+      margin-top: 48px;
+      padding-top: 16px;
+      border-top: 1px solid oklch(var(--quan-contrast-200-lch));
+      font-size: 12px;
+      color: oklch(var(--quan-contrast-400-lch));
+      line-height: 1.6;
+    }
+    footer code {
+      font-family: var(--quan-font-mono);
+      background: oklch(var(--quan-contrast-100-lch));
+      padding: 1px 6px;
+      border-radius: 3px;
+      font-size: 11px;
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header class="page-header">
+      <div>
+        <div class="crumbs">packages/ui · preview</div>
+        <h1>State &amp; attestation — frappe-inspired view</h1>
+        <p>
+          Spike: a swimlane / task-bar / dependency-arrow vocabulary borrowed
+          from frappe-gantt — without dates. Categories become swimlanes; status
+          drives both fill and a 4-px leading edge; detail surfaces on hover.
+          Bound to the shape of <code style="font-family:var(--quan-font-mono);font-size:11px">_state.json</code>.
+        </p>
+      </div>
+      <button class="theme-toggle" type="button" onclick="toggleTheme()">Toggle theme</button>
+    </header>
+
+    <div class="toolbar" role="toolbar" aria-label="View controls">
+      <span class="toolbar-label">Zoom</span>
+      <div class="pill-group">
+        <button class="pill" aria-pressed="false">Phase</button>
+        <button class="pill" aria-pressed="true">Epic</button>
+        <button class="pill" aria-pressed="false">Category</button>
+      </div>
+      <span class="toolbar-label" style="margin-left:8px">Show</span>
+      <div class="pill-group">
+        <button class="pill" aria-pressed="true">All</button>
+        <button class="pill" aria-pressed="false">At-risk</button>
+        <button class="pill" aria-pressed="false">Manual-review</button>
+      </div>
+      <span class="spacer"></span>
+      <span class="summary">
+        <span><strong>419</strong> capabilities</span>
+        <span><strong>92%</strong> compliant</span>
+        <span><strong>14</strong> at-risk</span>
+      </span>
+    </div>
+
+    <!-- ===== Surface: Epic 2 — Subscription lifecycle ===== -->
+    <section class="surface">
+      <header class="surface-header">
+        <h2>Epic 2 — Subscription lifecycle</h2>
+        <span class="meta">ADR-0030 · ADR-0037 · ADR-0038</span>
+      </header>
+
+      <!-- platform-convention lane -->
+      <div class="swimlane">
+        <div class="swimlane-rail">
+          <div class="label">Platform convention</div>
+          <div class="sublabel">ADR-0030</div>
+          <div class="counts">
+            <span class="count" data-status="compliant"><span aria-hidden>✓</span> 12</span>
+          </div>
+        </div>
+        <div class="swimlane-track">
+          <span class="popover-host">
+            <div class="task-bar" data-status="compliant" tabindex="0">
+              <span class="label">snake_case wire fields</span>
+              <span class="meta">ADR-30</span>
+            </div>
+            <div class="popover" role="dialog">
+              <h4>snake_case wire fields</h4>
+              <div class="pop-id">bigeng-01-snake-case-wire</div>
+              <dl>
+                <div class="pop-row"><dt>Status</dt><dd>COMPLIANT</dd></div>
+                <div class="pop-row"><dt>Evidence</dt><dd>2563 matches across apps/api/src/routes</dd></div>
+                <div class="pop-row"><dt>Ref</dt><dd>ADR-0030 §Convention 1</dd></div>
+              </dl>
+            </div>
+          </span>
+          <div class="task-bar" data-status="compliant"><span class="label">store_hash in payload</span><span class="meta">ADR-30</span></div>
+          <div class="task-bar" data-status="compliant"><span class="label">Typed-error contract</span><span class="meta">ADR-30</span></div>
+          <div class="task-bar" data-status="compliant"><span class="label">D1 migration discipline</span><span class="meta">ADR-30</span></div>
+          <div class="task-bar" data-status="compliant"><span class="label">Cents-precision currency</span><span class="meta">ADR-30</span></div>
+          <div class="task-bar" data-status="compliant"><span class="label">UTC + ISO-8601 timestamps</span><span class="meta">ADR-30</span></div>
+        </div>
+      </div>
+
+      <!-- adr-commitment lane — mixed status -->
+      <div class="swimlane">
+        <div class="swimlane-rail">
+          <div class="label">ADR commitments</div>
+          <div class="sublabel">29 ratified</div>
+          <div class="counts">
+            <span class="count" data-status="compliant"><span aria-hidden>✓</span> 22</span>
+            <span class="count" data-status="partial"><span aria-hidden>◐</span> 5</span>
+            <span class="count" data-status="non-compliant"><span aria-hidden>✕</span> 2</span>
+          </div>
+        </div>
+        <div class="swimlane-track">
+          <div class="task-bar" data-status="compliant"><span class="label">ADR-0037 stored instruments</span><span class="meta">closed</span></div>
+          <span class="popover-host">
+            <div class="task-bar" data-status="partial" tabindex="0">
+              <div class="progress-fill" style="width:60%"></div>
+              <span class="label">ADR-0038 capture timing</span>
+              <span class="meta">3/5 AC</span>
+            </div>
+            <div class="popover" role="dialog">
+              <h4>ADR-0038 capture timing</h4>
+              <div class="pop-id">adr-0038-capture-timing</div>
+              <dl>
+                <div class="pop-row"><dt>Status</dt><dd>PARTIAL — 3 of 5 ACs</dd></div>
+                <div class="pop-row"><dt>Open</dt><dd>auth/capture split + webhook transitions</dd></div>
+                <div class="pop-row"><dt>Spec</dt><dd>Hive #789</dd></div>
+                <div class="pop-row"><dt>Phase</dt><dd>2</dd></div>
+              </dl>
+            </div>
+          </span>
+          <div class="task-bar" data-status="compliant"><span class="label">ADR-0055 substrate</span><span class="meta">closed</span></div>
+          <div class="task-bar" data-status="partial">
+            <div class="progress-fill" style="width:75%"></div>
+            <span class="label">ADR-0019 hive metadata</span>
+            <span class="meta">3/4 AC</span>
+          </div>
+          <div class="task-bar" data-status="non-compliant"><span class="label">ADR-0044 dashboard rewire</span><span class="meta">0/3 AC</span></div>
+          <div class="task-bar" data-status="compliant"><span class="label">ADR-0006 epic gating</span><span class="meta">closed</span></div>
+        </div>
+      </div>
+
+      <!-- capability lane — biggest -->
+      <div class="swimlane">
+        <div class="swimlane-rail">
+          <div class="label">Capabilities</div>
+          <div class="sublabel">344 derived</div>
+          <div class="counts">
+            <span class="count" data-status="compliant"><span aria-hidden>✓</span> 287</span>
+            <span class="count" data-status="partial"><span aria-hidden>◐</span> 32</span>
+            <span class="count" data-status="non-compliant"><span aria-hidden>✕</span> 14</span>
+            <span class="count" data-status="manual-review"><span aria-hidden>?</span> 11</span>
+          </div>
+        </div>
+        <div class="swimlane-track">
+          <div class="task-bar" data-status="compliant"><span class="label">portal · subs list</span></div>
+          <div class="task-bar" data-status="compliant"><span class="label">portal · subs detail</span></div>
+          <div class="task-bar" data-status="compliant"><span class="label">admin · health badge</span></div>
+          <div class="task-bar" data-status="partial">
+            <div class="progress-fill" style="width:40%"></div>
+            <span class="label">storefront · cart binding</span>
+          </div>
+          <div class="task-bar" data-status="partial">
+            <div class="progress-fill" style="width:55%"></div>
+            <span class="label">webhook · payment.failed</span>
+          </div>
+          <div class="task-bar" data-status="non-compliant"><span class="label">admin · dunning workflow</span></div>
+          <div class="task-bar" data-status="manual-review"><span class="label">a11y · screen-reader audit</span></div>
+          <div class="task-bar" data-status="compliant"><span class="label">api · POST /v3/subscriptions</span></div>
+        </div>
+      </div>
+
+      <!-- nfr lane -->
+      <div class="swimlane">
+        <div class="swimlane-rail">
+          <div class="label">Non-functional</div>
+          <div class="sublabel">NFR · Gate 7</div>
+          <div class="counts">
+            <span class="count" data-status="compliant"><span aria-hidden>✓</span> 6</span>
+            <span class="count" data-status="manual-review"><span aria-hidden>?</span> 2</span>
+          </div>
+        </div>
+        <div class="swimlane-track">
+          <div class="task-bar" data-status="compliant"><span class="label">P95 &lt; 300ms (read)</span></div>
+          <div class="task-bar" data-status="compliant"><span class="label">P99 &lt; 800ms (write)</span></div>
+          <div class="task-bar" data-status="manual-review"><span class="label">WCAG 2.2 AA — portal</span></div>
+          <div class="task-bar" data-status="manual-review"><span class="label">the platform design system parity audit</span></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== Surface: Epic 1 (small, for variety) ===== -->
+    <section class="surface">
+      <header class="surface-header">
+        <h2>Epic 1 — Merchant onboarding</h2>
+        <span class="meta">closed-out 2026-05-13 · PR #1176</span>
+      </header>
+      <div class="swimlane">
+        <div class="swimlane-rail">
+          <div class="label">Scenario coverage</div>
+          <div class="sublabel">19 scenarios</div>
+          <div class="counts">
+            <span class="count" data-status="compliant"><span aria-hidden>✓</span> 19</span>
+          </div>
+        </div>
+        <div class="swimlane-track">
+          <div class="task-bar" data-status="compliant"><span class="label">install · happy-path</span></div>
+          <div class="task-bar" data-status="compliant"><span class="label">install · re-install idempotent</span></div>
+          <div class="task-bar" data-status="compliant"><span class="label">scope · missing scope error</span></div>
+          <div class="task-bar" data-status="compliant"><span class="label">scope · upgraded scope</span></div>
+          <div class="task-bar" data-status="compliant"><span class="label">uninstall · cleanup</span></div>
+        </div>
+      </div>
+
+      <!-- Dependency arrow demonstration -->
+      <div class="deps-demo">
+        <h3>Dependency routing — preview</h3>
+        <div class="deps-row">
+          <div class="task-bar" data-status="compliant" id="dep-a"><span class="label">Slice A — auth handshake</span></div>
+          <div class="task-bar" data-status="partial" id="dep-b">
+            <div class="progress-fill" style="width:50%"></div>
+            <span class="label">Slice B — scope upgrade</span>
+          </div>
+          <div class="task-bar" data-status="non-compliant" id="dep-c"><span class="label">Slice C — uninstall sweep</span></div>
+        </div>
+        <svg id="dep-arrows" style="position:absolute;inset:0;pointer-events:none" aria-hidden></svg>
+      </div>
+    </section>
+
+    <footer>
+      <strong>What this proves.</strong> Categories → swimlanes; status → fill + 4-px leading edge (dual-encoded, colorblind-safe); evidence → hover popover. No dates anywhere. The dependency-arrow primitive measures real DOM rects on resize so blocked_by chains render against the actual layout.<br/>
+      Backed by React primitives at <code>packages/ui/src/components/{swimlane,task-bar,dependency-arrow}</code>. This HTML is the static spike — open the React versions when the aesthetic lands.
+    </footer>
+  </div>
+
+  <script>
+    function toggleTheme() {
+      const html = document.documentElement;
+      const current = html.getAttribute('data-theme') || 'light';
+      html.setAttribute('data-theme', current === 'light' ? 'dark' : 'light');
+    }
+
+    // ===== Dependency arrow rendering (mirrors the React primitive's path math) =====
+    function drawArrow(svg, from, to, tone, radius) {
+      radius = radius || 8;
+      const stroke = {
+        contrast: 'oklch(var(--quan-contrast-300-lch))',
+        brand:    'oklch(var(--quan-brand-lch))',
+        warning:  'oklch(var(--quan-warning-lch))',
+        error:    'oklch(var(--quan-error-lch))',
+      }[tone] || 'oklch(var(--quan-contrast-300-lch))';
+
+      const stepX = from.x + Math.max(24, (to.x - from.x) / 2);
+      const yDir = to.y > from.y ? 1 : -1;
+      const r = Math.min(radius, Math.abs(to.y - from.y) / 2 || radius);
+
+      const d = [
+        `M ${from.x} ${from.y}`,
+        `H ${stepX - r}`,
+        `Q ${stepX} ${from.y} ${stepX} ${from.y + r * yDir}`,
+        `V ${to.y - r * yDir}`,
+        `Q ${stepX} ${to.y} ${stepX + r} ${to.y}`,
+        `H ${to.x}`,
+      ].join(' ');
+
+      const ns = 'http://www.w3.org/2000/svg';
+      const path = document.createElementNS(ns, 'path');
+      path.setAttribute('d', d);
+      path.setAttribute('stroke', stroke);
+      path.setAttribute('stroke-width', '1.5');
+      path.setAttribute('fill', 'none');
+      path.setAttribute('stroke-linecap', 'round');
+      path.setAttribute('opacity', '0.7');
+      svg.appendChild(path);
+
+      const head = document.createElementNS(ns, 'path');
+      head.setAttribute('d', `M ${to.x} ${to.y} l -6 -3 l 0 6 z`);
+      head.setAttribute('fill', stroke);
+      head.setAttribute('opacity', '0.7');
+      svg.appendChild(head);
+    }
+
+    function renderDependencies() {
+      const svg = document.getElementById('dep-arrows');
+      if (!svg) return;
+      svg.innerHTML = '';
+      const container = svg.parentElement.getBoundingClientRect();
+      svg.setAttribute('viewBox', `0 0 ${container.width} ${container.height}`);
+      svg.style.width = container.width + 'px';
+      svg.style.height = container.height + 'px';
+
+      const edges = [
+        { from: 'dep-a', to: 'dep-b', tone: 'contrast' },
+        { from: 'dep-b', to: 'dep-c', tone: 'warning' },
+      ];
+      for (const e of edges) {
+        const a = document.getElementById(e.from).getBoundingClientRect();
+        const b = document.getElementById(e.to).getBoundingClientRect();
+        drawArrow(
+          svg,
+          { x: a.right - container.left, y: a.top + a.height / 2 - container.top },
+          { x: b.left - container.left, y: b.top + b.height / 2 - container.top },
+          e.tone,
+        );
+      }
+    }
+
+    window.addEventListener('load', renderDependencies);
+    window.addEventListener('resize', renderDependencies);
+  </script>
+</body>
+</html>

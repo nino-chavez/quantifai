@@ -1,0 +1,141 @@
+---
+import Layout from '@/layouts/Layout.astro';
+import { InspectNav } from '@/components/InspectNav';
+import { loadBoard, loadAdrCount } from '@/lib/derived';
+import { loadAdrCatalog, repoLink } from '@/lib/content';
+import { portalConfig } from '@/lib/portal-config';
+
+const cfg = portalConfig();
+const board = loadBoard();
+const adrCount = loadAdrCount();
+const adrCatalog = loadAdrCatalog();
+const recentAdrs = adrCatalog.slice(0, 3);
+
+const decisionsDir = cfg.decisions.dir;
+
+// Doc cards come from blueprint.yml's portal.inspect.docs. Each entry is
+// { title, description, path? | href?, meta? }: `path` is repo-relative and
+// resolved via repoLink (skipped when no repoUrl is configured), `href` is an
+// absolute URL used verbatim. A fresh Tier-0 stamp has no configured docs, so
+// we fall back to the two generic methodology cards every initiative carries.
+interface DocCard {
+  title: string;
+  description: string;
+  href: string | null;
+  meta: string;
+}
+
+const DEFAULT_DOCS: DocCard[] = [
+  {
+    title: 'Methodology',
+    description: 'The long-term canon — how this initiative is structured, decided, and shipped.',
+    href: repoLink('METHODOLOGY.md'),
+    meta: '→ METHODOLOGY.md',
+  },
+  {
+    title: 'Decision record',
+    description: `${adrCount} ${adrCount === 1 ? 'ADR' : 'ADRs'}, indexed by number. Each decision is a markdown artifact under ${decisionsDir}/.`,
+    href: repoLink(decisionsDir),
+    meta: `→ ${decisionsDir}/`,
+  },
+];
+
+const configuredDocs: DocCard[] = cfg.inspect.docs.map((d: any) => {
+  const absolute = typeof d?.href === 'string' && d.href.length > 0 ? d.href : null;
+  const relative = typeof d?.path === 'string' && d.path.length > 0 ? repoLink(d.path) : null;
+  return {
+    title: String(d?.title ?? ''),
+    description: String(d?.description ?? ''),
+    href: absolute ?? relative,
+    meta: String(d?.meta ?? ''),
+  };
+});
+
+const docs: DocCard[] = configuredDocs.length > 0 ? configuredDocs : DEFAULT_DOCS;
+
+// Axioms come from blueprint.yml's portal.inspect.axioms. Each entry is
+// { id, text }. Empty at Tier-0 → the section hides rather than rendering a
+// reference-project's principles.
+interface Axiom {
+  id: string;
+  text: string;
+}
+
+const axioms: Axiom[] = cfg.inspect.axioms
+  .map((a: any) => ({ id: String(a?.id ?? ''), text: String(a?.text ?? '') }))
+  .filter((a: Axiom) => a.text.length > 0);
+
+// Substrate / issue-tracker card is only meaningful when a board source is
+// wired (features.board). The repo's issues live under <repoUrl>/issues.
+const issuesHref = cfg.repoUrl ? `${cfg.repoUrl.replace(/\/$/, '')}/issues` : null;
+const showSubstrateCard = cfg.features.board && issuesHref;
+---
+<Layout title="Inspect" description="Look under the hood. Methodology, decision records, derived state.">
+  <header class="mb-6 max-w-3xl">
+    <p class="mb-2 font-mono text-xs uppercase tracking-wide text-contrast-500">Inspect</p>
+    <h1 class="mb-3 font-heading text-4xl font-semibold leading-tight tracking-tight">
+      Look under the hood.
+    </h1>
+    <p class="text-lg leading-relaxed text-contrast-500">
+      Methodology, decision records, and derived state authority. How the work happens — the same care visible everywhere.
+    </p>
+  </header>
+
+  <InspectNav currentPath={Astro.url.pathname} />
+
+  <section class="grid gap-4 md:grid-cols-2">
+    {docs.map((doc) => (
+      doc.href ? (
+        <a href={doc.href} target="_blank" rel="noreferrer" class="group block rounded-lg border border-contrast-200 bg-background p-5 transition-colors hover:border-brand/60">
+          <h3 class="mb-1 font-heading text-base font-semibold tracking-tight text-foreground group-hover:text-brand">{doc.title}</h3>
+          <p class="mb-3 text-sm leading-relaxed text-contrast-500">{doc.description}</p>
+          {doc.meta && <p class="font-mono text-[10px] uppercase tracking-wide text-contrast-400">{doc.meta}</p>}
+        </a>
+      ) : (
+        <div class="block rounded-lg border border-contrast-200 bg-background p-5">
+          <h3 class="mb-1 font-heading text-base font-semibold tracking-tight text-foreground">{doc.title}</h3>
+          <p class="mb-3 text-sm leading-relaxed text-contrast-500">{doc.description}</p>
+          {doc.meta && <p class="font-mono text-[10px] uppercase tracking-wide text-contrast-400">{doc.meta}</p>}
+        </div>
+      )
+    ))}
+
+    {showSubstrateCard && (
+      <a href={issuesHref} target="_blank" rel="noreferrer" class="group block rounded-lg border border-contrast-200 bg-background p-5 transition-colors hover:border-brand/60">
+        <h3 class="mb-1 font-heading text-base font-semibold tracking-tight text-foreground group-hover:text-brand">Issue substrate</h3>
+        <p class="mb-3 text-sm leading-relaxed text-contrast-500">{board.totalOpen} open · {board.totalClosed} closed. Proposal lifecycle derived from the tracker's state.</p>
+        <p class="font-mono text-[10px] uppercase tracking-wide text-contrast-400">→ Issues</p>
+      </a>
+    )}
+
+    {recentAdrs.length > 0 && (
+      <div class="block rounded-lg border border-contrast-200 bg-background p-5">
+        <h3 class="mb-1 font-heading text-base font-semibold tracking-tight text-foreground">Recent ADRs</h3>
+        <p class="mb-3 text-sm leading-relaxed text-contrast-500">Most recently filed decision records:</p>
+        <ul class="space-y-1">
+          {recentAdrs.map((adr) => (
+            <li class="truncate font-mono text-[11px] text-contrast-500">
+              <span class="text-brand">ADR-{String(adr.number).padStart(4, '0')}</span>
+              <span class="ml-1.5">{adr.title.replace(/^ADR-\d+:?\s*/i, '')}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    )}
+  </section>
+
+  {axioms.length > 0 && (
+    <section class="mt-6 rounded-lg border border-contrast-200 bg-background p-5">
+      <h3 class="mb-3 font-heading text-base font-semibold tracking-tight">Trust axioms</h3>
+      <p class="mb-4 text-sm leading-relaxed text-contrast-500">Principles for how artifacts behave under multi-agent pressure.</p>
+      <ol class="space-y-2">
+        {axioms.map((axiom) => (
+          <li class="flex items-baseline gap-3">
+            {axiom.id && <span class="shrink-0 font-mono text-xs text-contrast-400">{axiom.id}</span>}
+            <span class="text-sm text-foreground" set:html={axiom.text} />
+          </li>
+        ))}
+      </ol>
+    </section>
+  )}
+</Layout>

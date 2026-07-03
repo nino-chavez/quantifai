@@ -1,0 +1,80 @@
+---
+import * as Shell from '@blueprint/ui/shell';
+import { PortalNav } from '@/components/PortalNav';
+// ArchaeologyChat is suppressed by default at the operator-decision layer.
+// The substrate is gated in three layers: at stamp time (WORKER_URL blanked),
+// at component time (renders a disabled "substrate not configured" button when
+// WORKER_URL is empty), and here — even with WORKER_URL configured, the widget
+// mounts only when the operator has explicitly flipped ARCHAEOLOGY_READY to true.
+// Flip to true ONLY when ALL of the following are met:
+//   1. blueprint.yml sets `archaeology.enabled: true`
+//   2. `bash tools/archaeology/scaffold.sh` has deployed the project's Worker + ingested sources
+//   3. WORKER_URL in src/components/ArchaeologyChat.tsx points at THIS project's substrate
+// See docs/patterns/archaeology-substrate-pattern.md for the full setup procedure.
+const ARCHAEOLOGY_READY = false;
+// Static import — Astro client:* islands MUST be statically imported (a dynamic
+// `await import()` here breaks the island bundler at build time). The render
+// below is gated on ARCHAEOLOGY_READY, so the disabled island is tree-shaken
+// out of the static build when the flag is false (the default).
+import { ArchaeologyChat } from '@/components/ArchaeologyChat';
+import { portalConfig } from '@/lib/portal-config';
+import '@/styles/global.css';
+
+// REPLACE_FOR_PROJECT: the initiative's display name (shown in the <title>
+// suffix and footer brand). Stamped at scaffold time.
+const PROJECT_NAME = 'Quantifai Next';
+// REPLACE_FOR_PROJECT: one-line tagline shown beside the brand in the footer.
+// Leave empty to render the brand alone.
+const PROJECT_TAGLINE = 'Cross-provider AI spend attribution, per developer';
+
+export interface Props {
+  title: string;
+  description?: string;
+}
+
+const { title, description } = Astro.props;
+const currentPath = Astro.url.pathname;
+const fullTitle = title === PROJECT_NAME ? title : `${title} — ${PROJECT_NAME}`;
+const config = portalConfig();
+const repoUrl = config.repoUrl;
+const archaeologySuggestions = config.archaeology.suggestions;
+---
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="generator" content={Astro.generator} />
+    <title>{fullTitle}</title>
+    {description && <meta name="description" content={description} />}
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Inter+Display:wght@500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+    />
+  </head>
+  <body class="min-h-screen bg-background text-foreground antialiased">
+    <Shell.Root>
+      <Shell.Header>
+        <PortalNav client:load currentPath={currentPath} />
+      </Shell.Header>
+      <Shell.Main>
+        <slot />
+      </Shell.Main>
+      <Shell.Footer>
+        <div class="flex flex-col items-start justify-between gap-2 sm:flex-row sm:items-center">
+          <p>
+            <span class="font-heading font-semibold text-foreground">{PROJECT_NAME}</span>{PROJECT_TAGLINE && <span> · {PROJECT_TAGLINE}</span>}
+          </p>
+          {repoUrl && (
+            <p class="font-mono text-[11px] uppercase tracking-wide text-contrast-400">
+              <a href={repoUrl} target="_blank" rel="noreferrer" class="hover:text-brand">github ↗</a>
+            </p>
+          )}
+        </div>
+      </Shell.Footer>
+    </Shell.Root>
+    {ARCHAEOLOGY_READY && <ArchaeologyChat client:idle pageContext={currentPath} suggestions={archaeologySuggestions} />}
+  </body>
+</html>
