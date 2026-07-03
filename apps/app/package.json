@@ -16,6 +16,7 @@
 		"lint": "eslint .",
 		"import:claude": "tsx scripts/import-claude-jsonl.ts",
 		"import:git": "tsx scripts/import-git-events.ts",
+		"seed:plan": "tsx scripts/seed-subscription-plan.ts",
 		"deploy": "npm run build && wrangler deploy",
 		"db:migrate:local": "wrangler d1 migrations apply quantifai --local",
 		"db:migrate:remote": "wrangler d1 migrations apply quantifai --remote",

@@ -17,6 +17,9 @@ function unit(overrides: Partial<UnitOfWorkRow> = {}): UnitOfWorkRow {
 		commit_count: 8,
 		first_session_at: '2026-07-03T10:00:00Z',
 		last_session_at: '2026-07-03T18:00:00Z',
+		amortized_cost: 0,
+		amortized_covered_sessions: 0,
+		amortized_interactive_sessions: 0,
 		...overrides
 	};
 }
@@ -28,7 +31,11 @@ const EMPTY: LedgerData = {
 		metered_cost: 0,
 		estimated_cost: 0,
 		subscription_cost: 0,
-		total_commits: 0
+		total_commits: 0,
+		amortized_cost: 0,
+		amortization_configured: false,
+		amortized_covered_sessions: 0,
+		amortized_interactive_sessions: 0
 	},
 	units: []
 };
@@ -40,9 +47,35 @@ const WITH_DATA: LedgerData = {
 		metered_cost: 0,
 		estimated_cost: 13.24,
 		subscription_cost: 0,
-		total_commits: 8
+		total_commits: 8,
+		amortized_cost: 0,
+		amortization_configured: false,
+		amortized_covered_sessions: 0,
+		amortized_interactive_sessions: 0
 	},
 	units: [unit()]
+};
+
+const WITH_AMORTIZATION: LedgerData = {
+	totals: {
+		total_sessions: 3,
+		total_cost: 13.24,
+		metered_cost: 0,
+		estimated_cost: 13.24,
+		subscription_cost: 0,
+		total_commits: 8,
+		amortized_cost: 8.1,
+		amortization_configured: true,
+		amortized_covered_sessions: 3,
+		amortized_interactive_sessions: 3
+	},
+	units: [
+		unit({
+			amortized_cost: 8.1,
+			amortized_covered_sessions: 3,
+			amortized_interactive_sessions: 3
+		})
+	]
 };
 
 describe('LedgerView — structural invariant: one primary CTA per rendered page (DESIGN.md)', () => {
@@ -76,6 +109,28 @@ describe('LedgerView — populated state', () => {
 
 	it('renders a provenance badge for a 100%-estimated unit', () => {
 		const { container } = render(LedgerView, { data: WITH_DATA });
+		expect(container.querySelector('.provenance-badge--estimated')).toBeTruthy();
+	});
+});
+
+describe('LedgerView — amortization provenance (DESIGN.md rule 1: the honest second number)', () => {
+	it('renders the "unconfigured" empty state instead of a bare $0 when no plan has been entered', () => {
+		const { getByTestId } = render(LedgerView, { data: WITH_DATA });
+		expect(getByTestId('amortization-empty')).toBeInTheDocument();
+	});
+
+	it('renders both the estimated and amortized figures once a plan is configured, never summed', () => {
+		const { getByTestId } = render(LedgerView, { data: WITH_AMORTIZATION });
+		const hero = getByTestId('hero');
+		expect(within(hero).getByText('$13.24')).toBeInTheDocument(); // estimated, unchanged
+		expect(within(getByTestId('hero-amortized')).getByText('$8.10')).toBeInTheDocument(); // amortized
+		// The two never appear pre-summed anywhere (e.g. $21.34 would be the wrong, summed figure).
+		expect(hero.textContent).not.toContain('21.34');
+	});
+
+	it('renders a subscription_amortized badge distinct from the estimated badge once configured', () => {
+		const { container } = render(LedgerView, { data: WITH_AMORTIZATION });
+		expect(container.querySelector('.provenance-badge--subscription_amortized')).toBeTruthy();
 		expect(container.querySelector('.provenance-badge--estimated')).toBeTruthy();
 	});
 });

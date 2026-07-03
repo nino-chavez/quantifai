@@ -14,6 +14,8 @@
  */
 
 import type { D1Database } from '@cloudflare/workers-types';
+import { computeAmortizationRollup } from './amortization-query';
+import { listSubscriptionPlans } from './subscription-plans';
 
 export interface LedgerTotals {
 	total_sessions: number;
@@ -22,6 +24,14 @@ export interface LedgerTotals {
 	estimated_cost: number;
 	subscription_cost: number;
 	total_commits: number;
+	/** Subscription-amortized total (DESIGN.md rule 1's honest second number) — sum of covered amortized cost across all interactive sessions, all time. Never summed with total_cost/estimated_cost. */
+	amortized_cost: number;
+	/** True when at least one subscription_plans row exists — gates the empty state independent of whether any given month happened to be covered. */
+	amortization_configured: boolean;
+	/** Interactive (subscription-attributed) sessions whose (provider, month) had a covering plan. */
+	amortized_covered_sessions: number;
+	/** All interactive sessions considered for amortization (covered + uncovered). */
+	amortized_interactive_sessions: number;
 }
 
 export interface UnitOfWorkRow {
@@ -37,6 +47,9 @@ export interface UnitOfWorkRow {
 	commit_count: number;
 	first_session_at: string | null;
 	last_session_at: string | null;
+	amortized_cost: number;
+	amortized_covered_sessions: number;
+	amortized_interactive_sessions: number;
 }
 
 export interface LedgerData {
@@ -50,13 +63,26 @@ const EMPTY_TOTALS: LedgerTotals = {
 	metered_cost: 0,
 	estimated_cost: 0,
 	subscription_cost: 0,
-	total_commits: 0
+	total_commits: 0,
+	amortized_cost: 0,
+	amortization_configured: false,
+	amortized_covered_sessions: 0,
+	amortized_interactive_sessions: 0
 };
 
 const PROVENANCE_SUM = (col: string, provenance: string) =>
 	`COALESCE(SUM(CASE WHEN ${col} = '${provenance}' THEN total_cost ELSE 0 END), 0)`;
 
-async function getLedgerTotals(db: D1Database): Promise<LedgerTotals> {
+type BaseTotals = Omit<
+	LedgerTotals,
+	'amortized_cost' | 'amortization_configured' | 'amortized_covered_sessions' | 'amortized_interactive_sessions'
+>;
+type BaseUnitRow = Omit<
+	UnitOfWorkRow,
+	'amortized_cost' | 'amortized_covered_sessions' | 'amortized_interactive_sessions'
+>;
+
+async function getLedgerTotals(db: D1Database): Promise<BaseTotals> {
 	const totalsRow = await db
 		.prepare(
 			`SELECT
@@ -67,7 +93,7 @@ async function getLedgerTotals(db: D1Database): Promise<LedgerTotals> {
 				${PROVENANCE_SUM('cost_provenance', 'subscription_amortized')} AS subscription_cost
 			 FROM sessions`
 		)
-		.first<Omit<LedgerTotals, 'total_commits'>>();
+		.first<Omit<BaseTotals, 'total_commits'>>();
 
 	const commitsRow = await db
 		.prepare(`SELECT COUNT(*) AS total_commits FROM git_events`)
@@ -85,7 +111,7 @@ async function getLedgerTotals(db: D1Database): Promise<LedgerTotals> {
 	};
 }
 
-async function getUnitOfWorkLedger(db: D1Database): Promise<UnitOfWorkRow[]> {
+async function getUnitOfWorkLedger(db: D1Database): Promise<BaseUnitRow[]> {
 	const { results } = await db
 		.prepare(
 			`SELECT
@@ -106,11 +132,39 @@ async function getUnitOfWorkLedger(db: D1Database): Promise<UnitOfWorkRow[]> {
 			 GROUP BY u.id, u.kind, u.name, u.project_path
 			 ORDER BY total_cost DESC`
 		)
-		.all<UnitOfWorkRow>();
+		.all<BaseUnitRow>();
 	return results;
 }
 
 export async function loadLedgerData(db: D1Database): Promise<LedgerData> {
-	const [totals, units] = await Promise.all([getLedgerTotals(db), getUnitOfWorkLedger(db)]);
-	return { totals: totals ?? EMPTY_TOTALS, units };
+	const [baseTotals, baseUnits, plans] = await Promise.all([
+		getLedgerTotals(db),
+		getUnitOfWorkLedger(db),
+		listSubscriptionPlans(db)
+	]);
+
+	// All-time rollup (sinceIso: null) — the ledger prices the whole practice,
+	// not a window (that's practice-numbers' job).
+	const rollup = await computeAmortizationRollup(db, plans, null);
+	const amortizationConfigured = plans.length > 0;
+
+	const totals: LedgerTotals = {
+		...(baseTotals ?? EMPTY_TOTALS),
+		amortized_cost: rollup.totals.amortizedCostUsd,
+		amortization_configured: amortizationConfigured,
+		amortized_covered_sessions: rollup.totals.coveredSessions,
+		amortized_interactive_sessions: rollup.totals.totalInteractiveSessions
+	};
+
+	const units: UnitOfWorkRow[] = baseUnits.map((unit) => {
+		const summary = rollup.perUnit.get(unit.unit_id);
+		return {
+			...unit,
+			amortized_cost: summary?.amortizedCostUsd ?? 0,
+			amortized_covered_sessions: summary?.coveredSessions ?? 0,
+			amortized_interactive_sessions: summary?.totalInteractiveSessions ?? 0
+		};
+	});
+
+	return { totals, units };
 }

@@ -44,6 +44,26 @@ export function dominantProvenance(totals: {
 	return null;
 }
 
+/**
+ * DESIGN.md rule 1's empty-state text for the amortized figure — never a
+ * bare $0. `amortization_configured` gates the whole message: even a unit
+ * with zero interactive sessions still reads as "no subscription sessions
+ * yet" once a plan exists, versus "unconfigured" when no plan has ever been
+ * entered.
+ */
+export function amortizedCoverageLabel(totals: {
+	amortization_configured: boolean;
+	amortized_interactive_sessions: number;
+	amortized_covered_sessions: number;
+}): string {
+	if (!totals.amortization_configured) return 'amortization unconfigured — set your plan fee';
+	if (totals.amortized_interactive_sessions === 0) return 'no subscription sessions yet';
+	if (totals.amortized_covered_sessions === totals.amortized_interactive_sessions) {
+		return 'covers all subscription sessions';
+	}
+	return `covers ${totals.amortized_covered_sessions}/${totals.amortized_interactive_sessions} subscription sessions`;
+}
+
 export function formatCommitCount(n: number): string {
 	if (n === 0) return 'no commits linked';
 	return n === 1 ? '1 commit' : `${n} commits`;
