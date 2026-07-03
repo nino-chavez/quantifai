@@ -7,15 +7,18 @@
 	// see https://svelte.dev/docs/kit/adapter-cloudflare.
 	"compatibility_date": "2026-07-03",
 	"compatibility_flags": ["nodejs_als"],
-	// Custom domain (Access coverage confirmed on both apps before this was
-	// added — see the initiative's final report). workers_dev stays explicit
-	// `true` so the workers.dev hostname keeps working alongside it — adding
-	// `routes` disables workers.dev by default unless this is set.
+	// Zone ROUTE + explicit proxied A/AAAA records, deliberately NOT a Workers
+	// custom domain: the managed custom-domain record (AAAA 100:: only) served
+	// no A answers from authoritative DNS, so IPv4-only clients could never
+	// connect (found 2026-07-03). Access coverage for this hostname was
+	// confirmed on both Zero Trust apps before it went live. workers_dev stays
+	// explicit `true` so the workers.dev hostname keeps working alongside it —
+	// adding `routes` disables workers.dev by default unless this is set.
 	"workers_dev": true,
 	"routes": [
 		{
-			"pattern": "app.quantifai.app",
-			"custom_domain": true
+			"pattern": "app.quantifai.app/*",
+			"zone_name": "quantifai.app"
 		}
 	],
 	"assets": {
