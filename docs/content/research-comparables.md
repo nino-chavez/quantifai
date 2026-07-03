@@ -80,6 +80,7 @@ The pilot re-targeted same-day from `commerce-ai-ops-cfo` to `solo-operator-prac
 - **Surviving unchanged:** the sibling scan (inheritance map improves — shipper promotes to core), the normalization-layer pattern, FOCUS-aligned schema naming (DP-6), provenance discipline (DP-1, categories re-derived as subscription-amortized/API-metered/estimated), claims-match-GA (DP-5), insight-cards-over-tables (DP-4), the "absence of screenshots is the market gap" finding — which now reads at the unit-of-work grain.
 - **Superseded kill-questions:** KQ-a/KQ-d (owner walkthrough/demand) resolve via the first-party walkthrough; new KQ-1/2/3 defined in ADR-0003 (grain already served? / decision-changing within 30 days? / external pull?).
 - **New competitive leg:** `research/competitive/solo-market.md` (ccusage, provider-native personal surfaces, OpenRouter, Helicone-class) — the competitors of record for this pilot.
+- **KQ-1 called (2026-07-03): the unit-of-work + output grain is NOT already served** — every tracker found stops at tokens-and-dollars; the initiative continues. Corollary build-posture correction: ingestion breadth is commoditized (ccusage 16.8k stars, free) — differentiate only at the cost↔output pairing layer; evaluate ccusage/openusage as ingestion substrate at Stage 3; study Exceeds Ink's git-notes mechanism for commit linkage.
 
 ## Handoff to Stage 2
 
