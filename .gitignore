@@ -1,0 +1,29 @@
+# Dependencies (npm workspaces hoist to the repo root)
+node_modules/
+
+# Build output
+/.svelte-kit
+/build
+/dist
+.output
+.vercel
+.netlify
+.wrangler
+
+# Env
+.env
+.env.*
+!.env.example
+!.env.test
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Supabase local dev
+.branches
+.temp
+
+# Test artifacts
+test-results/
+playwright-report/

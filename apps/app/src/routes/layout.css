@@ -1,0 +1,72 @@
+@import 'tailwindcss';
+
+/* L0 tokens — inherited from quantifai-lite, the salvaged brand (DESIGN.md L0).
+   Warm dark neutrals + gold accent; Space Grotesk/Inter/JetBrains Mono; semantic
+   chart palette (gold=cost, blue=usage, green=savings, red=overage). */
+@theme {
+	--color-bg: #0a0a0a;
+	--color-surface: #131210;
+	--color-surface-raised: #1b1917;
+	--color-border: #2a2724;
+	--color-text: #f4f1ec;
+	--color-text-muted: #a39d92;
+	--color-gold: #f0c05e;
+	--color-gold-dark: #e8a735;
+	--color-usage-blue: #6ea8d8;
+	--color-savings-green: #6fbf8c;
+	--color-overage-red: #e0685a;
+
+	--font-display: 'Space Grotesk', ui-sans-serif, system-ui, sans-serif;
+	--font-body: 'Inter', ui-sans-serif, system-ui, sans-serif;
+	--font-mono: 'JetBrains Mono', ui-monospace, 'SFMono-Regular', monospace;
+}
+
+body {
+	background-color: var(--color-bg);
+	color: var(--color-text);
+	font-family: var(--font-body);
+}
+
+.font-display {
+	font-family: var(--font-display);
+}
+
+/* Tabular numerals for every dollar figure — cost numbers must not jitter
+   as digits change (DESIGN.md L1 metric number atom). */
+.metric-number {
+	font-family: var(--font-mono);
+	font-variant-numeric: tabular-nums;
+}
+
+/* Provenance badges — distinct fill per DESIGN.md L1, not color-only
+   (accessibility: shape/label carries the meaning, color reinforces it). */
+.provenance-badge {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.25rem;
+	font-family: var(--font-mono);
+	font-size: 0.6875rem;
+	letter-spacing: 0.02em;
+	padding: 0.125rem 0.5rem;
+	border-radius: 9999px;
+	border-width: 1px;
+	text-transform: uppercase;
+}
+
+.provenance-badge--estimated {
+	color: var(--color-gold);
+	border-color: color-mix(in srgb, var(--color-gold) 45%, transparent);
+	background: color-mix(in srgb, var(--color-gold) 12%, transparent);
+}
+
+.provenance-badge--api_metered {
+	color: var(--color-savings-green);
+	border-color: color-mix(in srgb, var(--color-savings-green) 45%, transparent);
+	background: color-mix(in srgb, var(--color-savings-green) 12%, transparent);
+}
+
+.provenance-badge--subscription_amortized {
+	color: var(--color-usage-blue);
+	border-color: color-mix(in srgb, var(--color-usage-blue) 45%, transparent);
+	background: color-mix(in srgb, var(--color-usage-blue) 12%, transparent);
+}
