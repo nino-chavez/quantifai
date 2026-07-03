@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { formatUsd, provenanceMixLabel, formatCommitCount, formatSessionCount, dominantProvenance } from './format';
+import {
+	formatUsd,
+	provenanceMixLabel,
+	formatCommitCount,
+	formatSessionCount,
+	dominantProvenance,
+	amortizedCoverageLabel
+} from './format';
 
 describe('formatUsd', () => {
 	it('formats whole dollars without cents for larger amounts', () => {
@@ -75,5 +82,47 @@ describe('formatSessionCount', () => {
 	it('pluralizes sessions', () => {
 		expect(formatSessionCount(1)).toBe('1 session');
 		expect(formatSessionCount(3)).toBe('3 sessions');
+	});
+});
+
+describe('amortizedCoverageLabel', () => {
+	it('renders the unconfigured empty state when no plan has ever been entered', () => {
+		expect(
+			amortizedCoverageLabel({
+				amortization_configured: false,
+				amortized_interactive_sessions: 5,
+				amortized_covered_sessions: 0
+			})
+		).toBe('amortization unconfigured — set your plan fee');
+	});
+
+	it('reports full coverage once every interactive session falls under a configured plan', () => {
+		expect(
+			amortizedCoverageLabel({
+				amortization_configured: true,
+				amortized_interactive_sessions: 5,
+				amortized_covered_sessions: 5
+			})
+		).toBe('covers all subscription sessions');
+	});
+
+	it('reports partial coverage as a fraction when some months have no covering plan', () => {
+		expect(
+			amortizedCoverageLabel({
+				amortization_configured: true,
+				amortized_interactive_sessions: 10,
+				amortized_covered_sessions: 4
+			})
+		).toBe('covers 4/10 subscription sessions');
+	});
+
+	it('reports "no subscription sessions yet" when a plan is configured but nothing to amortize exists', () => {
+		expect(
+			amortizedCoverageLabel({
+				amortization_configured: true,
+				amortized_interactive_sessions: 0,
+				amortized_covered_sessions: 0
+			})
+		).toBe('no subscription sessions yet');
 	});
 });

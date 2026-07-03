@@ -1,5 +1,13 @@
 <script lang="ts">
-	import { formatUsd, provenanceMixLabel, formatCommitCount, formatSessionCount, dominantProvenance } from '$lib/format';
+	import {
+		formatUsd,
+		provenanceMixLabel,
+		formatCommitCount,
+		formatSessionCount,
+		dominantProvenance,
+		amortizedCoverageLabel
+	} from '$lib/format';
+	import { resolve } from '$app/paths';
 	import type { LedgerData, UnitOfWorkRow } from '$lib/server/ledger';
 
 	let { data }: { data: LedgerData } = $props();
@@ -26,6 +34,12 @@
 		<h1 class="font-display mt-2 text-2xl font-semibold text-[var(--color-text)]">
 			What your practice cost, and what it produced
 		</h1>
+		<a
+			href={resolve('/practice-numbers')}
+			class="mt-3 inline-block text-sm text-[var(--color-usage-blue)] hover:underline"
+		>
+			Practice numbers — rates, per-project export →
+		</a>
 	</header>
 
 	{#if isEmpty}
@@ -52,11 +66,35 @@
 			class="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-8 py-8"
 			data-testid="hero"
 		>
-			<p class="text-sm text-[var(--color-text-muted)]">Total practice cost, all time</p>
-			<p class="metric-number font-display mt-1 text-5xl font-semibold text-[var(--color-gold)]">
-				{formatUsd(data.totals.total_cost)}
-			</p>
-			<p class="mt-2 text-sm text-[var(--color-text-muted)]">
+			<div class="flex flex-wrap gap-10">
+				<div>
+					<p class="text-sm text-[var(--color-text-muted)]">Estimated, all time (API-equivalent)</p>
+					<p class="metric-number font-display mt-1 text-5xl font-semibold text-[var(--color-gold)]">
+						{formatUsd(data.totals.total_cost)}
+					</p>
+					<span class="provenance-badge provenance-badge--estimated mt-2">estimated</span>
+				</div>
+				<div data-testid="hero-amortized">
+					<p class="text-sm text-[var(--color-text-muted)]">Amortized, all time (your subscription cost)</p>
+					{#if data.totals.amortization_configured}
+						<p class="metric-number font-display mt-1 text-5xl font-semibold text-[var(--color-usage-blue)]">
+							{formatUsd(data.totals.amortized_cost)}
+						</p>
+						<span class="provenance-badge provenance-badge--subscription_amortized mt-2">
+							subscription amortized
+						</span>
+					{:else}
+						<p class="mt-1 max-w-xs text-sm text-[var(--color-text-muted)]" data-testid="amortization-empty">
+							Amortization unconfigured — set your plan fee with
+							<code class="metric-number">npm run seed:plan</code>.
+						</p>
+					{/if}
+					<p class="mt-2 text-xs text-[var(--color-text-muted)]">
+						{amortizedCoverageLabel(data.totals)}
+					</p>
+				</div>
+			</div>
+			<p class="mt-4 text-sm text-[var(--color-text-muted)]">
 				{provenanceMixLabel(data.totals)} · {formatSessionCount(data.totals.total_sessions)} across
 				{data.units.length}
 				{data.units.length === 1 ? 'unit of work' : 'units of work'} · {formatCommitCount(
@@ -104,8 +142,9 @@
 						<tr class="border-b border-[var(--color-border)] text-left text-xs uppercase tracking-wide text-[var(--color-text-muted)]">
 							<th class="px-4 py-3 font-normal">Unit of work</th>
 							<th class="px-4 py-3 font-normal">Sessions</th>
-							<th class="px-4 py-3 font-normal">Cost</th>
+							<th class="px-4 py-3 font-normal">Cost (estimated)</th>
 							<th class="px-4 py-3 font-normal">Provenance</th>
+							<th class="px-4 py-3 font-normal">Cost (amortized)</th>
 							<th class="px-4 py-3 font-normal">Output (commits)</th>
 							<th class="px-4 py-3 font-normal">Last active</th>
 						</tr>
@@ -126,6 +165,18 @@
 										</span>
 									{:else}
 										<span class="text-xs text-[var(--color-text-muted)]">{provenanceMixLabel(unit)}</span>
+									{/if}
+								</td>
+								<td class="px-4 py-3">
+									{#if data.totals.amortization_configured && unit.amortized_interactive_sessions > 0}
+										<span class="metric-number text-[var(--color-usage-blue)]">
+											{formatUsd(unit.amortized_cost)}
+										</span>
+										<div class="text-xs text-[var(--color-text-muted)]">
+											{unit.amortized_covered_sessions}/{unit.amortized_interactive_sessions} sessions covered
+										</div>
+									{:else}
+										<span class="text-xs text-[var(--color-text-muted)]">unconfigured</span>
 									{/if}
 								</td>
 								<td class="metric-number px-4 py-3 text-[var(--color-text)]">{unit.commit_count}</td>

@@ -41,6 +41,8 @@ export interface IngestGitEvent {
 	message: string | null;
 	/** Look up (never create) — a repo with zero Claude Code sessions has no unit yet. */
 	unitProjectPath: string | null;
+	/** Classified client-side from `%P` parent-hash count (src/lib/importers/git-log.ts) — 2+ parents = merge. */
+	isMerge: boolean;
 }
 
 export interface IngestBatch {
@@ -136,7 +138,8 @@ export async function processIngestBatch(db: D1Database, batch: IngestBatch): Pr
 			message: event.message,
 			unitId: unitId ?? null,
 			sessionId: match?.sessionId ?? null,
-			linkMethod: 'time_window'
+			linkMethod: 'time_window',
+			isMerge: event.isMerge
 		});
 		gitEventsAccepted += 1;
 		if (match) gitEventsLinked += 1;

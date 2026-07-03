@@ -66,6 +66,7 @@ interface RawGitEvent {
 	authoredAt: string;
 	message: string | null;
 	unitProjectPath: string | null;
+	isMerge: boolean;
 }
 
 async function main() {
@@ -110,7 +111,8 @@ async function main() {
 				commitSha: commit.sha,
 				authoredAt: commit.authoredAt,
 				message: commit.message,
-				unitProjectPath: projectPath
+				unitProjectPath: projectPath,
+				isMerge: commit.isMerge
 			});
 		}
 		totalCommits += commits.length;
@@ -172,14 +174,23 @@ async function writeLocal(events: RawGitEvent[]): Promise<number> {
 			);
 			if (match) linked += 1;
 			statements.push(
-				`INSERT INTO git_events (id, repo, commit_sha, authored_at, message, unit_id, session_id, link_method)
-				 VALUES (${sqlLiteral(randomUUID())}, ${sqlLiteral(event.repo)}, ${sqlLiteral(event.commitSha)}, ${sqlLiteral(event.authoredAt)}, ${sqlLiteral(event.message)}, ${sqlLiteral(unitId)}, ${sqlLiteral(match?.sessionId ?? null)}, 'time_window')
-				 ON CONFLICT (repo, commit_sha) DO UPDATE SET unit_id = excluded.unit_id, session_id = excluded.session_id;`
+				`INSERT INTO git_events (id, repo, commit_sha, authored_at, message, unit_id, session_id, link_method, is_merge)
+				 VALUES (${sqlLiteral(randomUUID())}, ${sqlLiteral(event.repo)}, ${sqlLiteral(event.commitSha)}, ${sqlLiteral(event.authoredAt)}, ${sqlLiteral(event.message)}, ${sqlLiteral(unitId)}, ${sqlLiteral(match?.sessionId ?? null)}, 'time_window', ${event.isMerge ? 1 : 0})
+				 ON CONFLICT (repo, commit_sha) DO UPDATE SET unit_id = excluded.unit_id, session_id = excluded.session_id, is_merge = excluded.is_merge;`
 			);
 		}
 	}
 
-	if (statements.length) runD1File(statements.join('\n'), d1opts);
+	// Chunked for the same reason import-claude-jsonl.ts's writeLocal chunks
+	// at 40 rather than 500: measured empirically (QUANTIFAI_DEBUG_SQL=1 in
+	// ingest-client.ts's runD1File), wrangler's local D1 executor rejects a
+	// --file with SQLITE_TOOBIG well under SQLite's own ~1MB SQL-length
+	// default (a 100-row, ~200KB chunk already fails) — an un-chunked
+	// multi-hundred-commit history would fail the same way.
+	const LOCAL_SQL_CHUNK_SIZE = 40;
+	for (const batch of chunk(statements, LOCAL_SQL_CHUNK_SIZE)) {
+		if (batch.length) runD1File(batch.join('\n'), d1opts);
+	}
 	return linked;
 }
 
