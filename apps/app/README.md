@@ -113,12 +113,19 @@ npm run db:migrate:remote    # applies migrations/*.sql to the hosted D1 databas
 wrangler secret put INGEST_API_KEY_HASH   # SHA-256 hex of the ingest Bearer key
 ```
 
-Canonical hostname is **app.quantifai.app** (custom domain on the
-`quantifai-app` Worker, `quantifai.app` zone). `quantifai-app.biq.workers.dev`
-stays live as a fallback — both hostnames route to the same Worker and carry
-identical Cloudflare Access coverage (see below), so either works; switch
-`QUANTIFAI_API_URL` to the custom domain when convenient (see
-`.env.example`).
+Canonical **browser** hostname is **app.quantifai.app** (zone route +
+explicit proxied A/AAAA on the `quantifai.app` zone — deliberately NOT a
+Workers custom domain: the managed record served AAAA-only with zero A
+answers, breaking IPv4 clients; found 2026-07-03).
+
+Canonical **importer/API** hostname is **quantifai-app.biq.workers.dev**
+(`QUANTIFAI_API_URL`): the `quantifai.app` zone carries a security rule
+(landing-era, unreadable with current API tokens) that serves a Cloudflare
+block page on non-browser POSTs, so `POST /api/v1/ingest` 403s on the
+custom domain while working on workers.dev, which is off-zone. If that WAF
+rule is ever removed (dashboard: Security → WAF → custom rules), the split
+can collapse to one hostname. Both hostnames route to the same Worker and
+carry identical Access coverage (see below).
 
 Both hostnames sit behind Cloudflare Access (Zero Trust org
 `quantifai-next.cloudflareaccess.com`, OTP IdP for the operator email), with
