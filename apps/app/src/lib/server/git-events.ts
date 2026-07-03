@@ -7,6 +7,7 @@
  */
 
 import type { D1Database } from '@cloudflare/workers-types';
+import { GIT_EVENT_UPSERT_ON_CONFLICT } from '$lib/importers/git-event-upsert-sql';
 
 export interface GitEventInput {
 	repo: string;
@@ -25,10 +26,7 @@ export async function upsertGitEvent(db: D1Database, input: GitEventInput): Prom
 		.prepare(
 			`INSERT INTO git_events (id, repo, commit_sha, authored_at, message, unit_id, session_id, link_method, is_merge)
 			 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
-			 ON CONFLICT (repo, commit_sha) DO UPDATE SET
-			   unit_id = excluded.unit_id,
-			   session_id = excluded.session_id,
-			   is_merge = excluded.is_merge`
+			 ${GIT_EVENT_UPSERT_ON_CONFLICT}`
 		)
 		.bind(
 			crypto.randomUUID(),
@@ -56,6 +54,8 @@ export interface CommitStats {
 	unit_id: string | null;
 	commit_count: number;
 	merge_count: number;
+	/** Commits linked via a git-notes record (link_method = 'git_notes') — deterministic, vs. the time-window fallback for the rest. */
+	deterministic_commit_count: number;
 }
 
 export async function commitStatsByUnit(db: D1Database, sinceIso: string | null): Promise<CommitStats[]> {
@@ -64,7 +64,8 @@ export async function commitStatsByUnit(db: D1Database, sinceIso: string | null)
 			`SELECT
 				unit_id,
 				COUNT(*) AS commit_count,
-				COALESCE(SUM(is_merge), 0) AS merge_count
+				COALESCE(SUM(is_merge), 0) AS merge_count,
+				COALESCE(SUM(CASE WHEN link_method = 'git_notes' THEN 1 ELSE 0 END), 0) AS deterministic_commit_count
 			 FROM git_events
 			 WHERE (?1 IS NULL OR authored_at >= ?1)
 			 GROUP BY unit_id`

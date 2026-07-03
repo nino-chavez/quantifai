@@ -18,6 +18,7 @@ const BASE: PracticeNumbersData = {
 			amortized_covered_sessions: 12,
 			amortized_interactive_sessions: 12,
 			commit_count: 8,
+			deterministic_commit_count: 0,
 			merge_count: 2
 		}
 	],
@@ -61,6 +62,26 @@ describe('buildPracticeNumbersMarkdown', () => {
 		expect(md).toContain('2+ parents');
 	});
 
+	it('names both linkage mechanisms in the commits methodology note', () => {
+		const md = buildPracticeNumbersMarkdown(BASE);
+		expect(md).toContain('git-notes');
+		expect(md).toContain('time-window join');
+	});
+
+	it('renders a bare commit count with no deterministic suffix when nothing is git-notes-linked', () => {
+		const md = buildPracticeNumbersMarkdown(BASE);
+		expect(md).toContain('| 8 | 2 |');
+	});
+
+	it('renders the deterministic count inline in the Commits column when present', () => {
+		const withDeterministic: PracticeNumbersData = {
+			...BASE,
+			projects: [{ ...BASE.projects[0], commit_count: 8, deterministic_commit_count: 3 }]
+		};
+		const md = buildPracticeNumbersMarkdown(withDeterministic);
+		expect(md).toContain('8 (3 deterministic)');
+	});
+
 	it('renders the amortization-unconfigured message instead of a bare number when unconfigured', () => {
 		const unconfigured: PracticeNumbersData = {
 			...BASE,
@@ -84,10 +105,22 @@ describe('buildPracticeNumbersCsv', () => {
 		const csv = buildPracticeNumbersCsv(BASE);
 		const lines = csv.trim().split('\n');
 		expect(lines[0]).toBe(
-			'unit,kind,project_path,sessions,estimated_cost_usd,amortized_cost_usd,amortized_covered_sessions,amortized_interactive_sessions,commits,merges'
+			'unit,kind,project_path,sessions,estimated_cost_usd,amortized_cost_usd,amortized_covered_sessions,amortized_interactive_sessions,commits,commits_deterministic,merges'
 		);
 		expect(lines[1]).toBe(
-			'quantifai-next,initiative,/Users/nino/Workspace/dev/wip/quantifai-next,12,45.50,30.00,12,12,8,2'
+			'quantifai-next,initiative,/Users/nino/Workspace/dev/wip/quantifai-next,12,45.50,30.00,12,12,8,0,2'
+		);
+	});
+
+	it('carries the git-notes deterministic count as its own numeric column, separate from the total', () => {
+		const withDeterministic: PracticeNumbersData = {
+			...BASE,
+			projects: [{ ...BASE.projects[0], commit_count: 8, deterministic_commit_count: 3 }]
+		};
+		const csv = buildPracticeNumbersCsv(withDeterministic);
+		const lines = csv.trim().split('\n');
+		expect(lines[1]).toBe(
+			'quantifai-next,initiative,/Users/nino/Workspace/dev/wip/quantifai-next,12,45.50,30.00,12,12,8,3,2'
 		);
 	});
 

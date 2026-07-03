@@ -38,6 +38,50 @@ npm run import:git -- --local
 
 Both are idempotent — re-running recomputes from source and upserts.
 
+## Deterministic commit attribution (git-notes, ADR-0004)
+
+`npm run import:git`'s time-window join ("a commit landed while a session
+covering this repo was active") is a guess — it's wrong exactly when several
+sessions/worktrees are active in the same repo at once. The
+`quantifai-post-commit` hook removes the guess: it writes a git note under
+`refs/notes/quantifai` naming the exact session for every commit made while
+the hook is installed, and the importer prefers that note over the
+time-window join whenever one exists.
+
+Install once per repo (works for the main checkout and every linked
+worktree, present and future, from a single install — see
+`scripts/install-git-hook.ts`'s header for why):
+
+```sh
+npm run hooks:install -- /path/to/repo [/path/to/another-repo ...]
+```
+
+Session-id resolution ladder (first hit wins, each rung recorded as the
+note's `source`): (a) `$CLAUDE_SESSION_ID`/`$CLAUDE_CODE_SESSION_ID` env var
+— set when the commit runs inside a Claude Code Bash tool call; (b) the
+repo's live session heartbeat lock (`<git-common-dir>/.claude-sessions/*.json`,
+written by the operator's worktree-guard hooks) — the freshest lock whose
+`cwd` + `branch` match this commit; (c) neither resolves -> no note, the
+commit falls back to the time-window join at import time exactly as before.
+Full mechanism + empirical findings: `hooks/quantifai-post-commit`.
+
+**Limitations (v1, deliberate):**
+- **Local-only.** Git notes do NOT travel with `git clone`/`git push` unless
+  pushed explicitly. A fresh clone (or a machine that never ran the hook)
+  has zero notes — all its history reads as `time_window`, honestly, not as
+  an error. To carry notes to another clone/machine:
+  ```sh
+  git push origin refs/notes/quantifai
+  # on the other clone:
+  git fetch origin refs/notes/quantifai:refs/notes/quantifai
+  ```
+  No shipper/sync daemon exists for this yet — it's a manual escape hatch,
+  not automated.
+- **Never regresses.** Once a commit is linked via a note (`link_method =
+  'git_notes'`), a later re-import can only ever upgrade or preserve that
+  link, never fall back to a `time_window` guess for the same commit — see
+  `src/lib/importers/git-event-upsert-sql.ts`.
+
 ## Configure subscription amortization (the honest second number)
 
 Every cost is `estimated` (list-price API-equivalent) until you record your
@@ -86,8 +130,12 @@ npx playwright test             # @smoke e2e — builds and runs against `wrangl
   `src/lib/server/` — a Worker queries D1 directly with no PostgREST row
   cap, so no RPC indirection.
 - `scripts/import-claude-jsonl.ts` — the Claude Code JSONL importer.
-- `scripts/import-git-events.ts` — the git-log importer (server does the
-  time-window join in remote mode).
+- `scripts/import-git-events.ts` — the git-log importer: reads local
+  `refs/notes/quantifai` notes (deterministic linkage) and falls back to the
+  server-side time-window join in remote mode for anything un-noted.
+- `hooks/quantifai-post-commit` + `scripts/install-git-hook.ts` — the
+  git-notes attribution hook and its installer (see "Deterministic commit
+  attribution" above).
 - `src/routes/api/v1/ingest/+server.ts` — Bearer-key-gated ingest endpoint.
 - `src/routes/api/v1/health/+server.ts` — unauthenticated liveness probe.
 - `src/lib/adapters/blueprint.ts` — read-only `.blueprint/telemetry.jsonl`

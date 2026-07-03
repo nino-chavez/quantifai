@@ -3,6 +3,7 @@
 		formatUsd,
 		provenanceMixLabel,
 		formatCommitCount,
+		formatCommitCell,
 		formatSessionCount,
 		dominantProvenance,
 		amortizedCoverageLabel,
@@ -159,7 +160,8 @@
 				{provenanceMixLabel(data.totals)} · {formatSessionCount(data.totals.total_sessions)} across
 				{data.units.length}
 				{data.units.length === 1 ? 'unit of work' : 'units of work'} · {formatCommitCount(
-					data.totals.total_commits
+					data.totals.total_commits,
+					data.totals.deterministic_commits
 				)}
 			</p>
 		</section>
@@ -185,7 +187,7 @@
 							{formatUsd(unit.total_cost)}
 						</span>
 						<span class="w-32 shrink-0 text-right text-xs text-[var(--color-text-muted)]">
-							{formatCommitCount(unit.commit_count)}
+							{formatCommitCount(unit.commit_count, unit.deterministic_commit_count)}
 						</span>
 					</li>
 				{/each}
@@ -240,7 +242,9 @@
 										<span class="text-xs text-[var(--color-text-muted)]">unconfigured</span>
 									{/if}
 								</td>
-								<td class="metric-number px-4 py-3 text-[var(--color-text)]">{unit.commit_count}</td>
+								<td class="metric-number px-4 py-3 text-[var(--color-text)]">
+									{formatCommitCell(unit.commit_count, unit.deterministic_commit_count)}
+								</td>
 								<td class="px-4 py-3 text-[var(--color-text-muted)]">{lastActive(unit.last_session_at)}</td>
 							</tr>
 						{/each}

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { formatUsd } from '$lib/format';
+	import { formatUsd, formatCommitCell } from '$lib/format';
 	import { METHODOLOGY, type PracticeNumbersData } from '$lib/practice-numbers-shared';
 	import { buildPracticeNumbersMarkdown, buildPracticeNumbersCsv } from '$lib/export/practice-numbers-export';
 	import { resolve } from '$app/paths';
@@ -124,7 +124,9 @@
 								<td class="metric-number px-4 py-3 text-[var(--color-text)]">{row.session_count}</td>
 								<td class="metric-number px-4 py-3 text-[var(--color-gold)]">{formatUsd(row.estimated_cost)}</td>
 								<td class="metric-number px-4 py-3 text-[var(--color-usage-blue)]">{amortizedCell(row)}</td>
-								<td class="metric-number px-4 py-3 text-[var(--color-text)]">{row.commit_count}</td>
+								<td class="metric-number px-4 py-3 text-[var(--color-text)]">
+									{formatCommitCell(row.commit_count, row.deterministic_commit_count)}
+								</td>
 								<td class="metric-number px-4 py-3 text-[var(--color-text)]">{row.merge_count}</td>
 							</tr>
 						{/each}

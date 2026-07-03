@@ -15,6 +15,7 @@ function project(overrides: Partial<PracticeNumbersData['projects'][number]> = {
 		amortized_covered_sessions: 12,
 		amortized_interactive_sessions: 12,
 		commit_count: 8,
+		deterministic_commit_count: 0,
 		merge_count: 2,
 		...overrides
 	};
@@ -104,6 +105,20 @@ describe('PracticeNumbersView — populated state', () => {
 	it('renders "not instrumented" for deploys/week, never a merge-count proxy', () => {
 		const { getByTestId } = render(PracticeNumbersView, { data: WITH_DATA });
 		expect(getByTestId('deploys-not-instrumented')).toHaveTextContent('not instrumented');
+	});
+
+	it('renders a bare commit count when nothing is git-notes-linked yet', () => {
+		const { getByTestId } = render(PracticeNumbersView, { data: WITH_DATA });
+		expect(within(getByTestId('project-table')).getByText('8')).toBeInTheDocument();
+	});
+
+	it('surfaces the deterministic (git-notes) subset inline once present (ADR-0004)', () => {
+		const withDeterministic: PracticeNumbersData = {
+			...WITH_DATA,
+			projects: [project({ commit_count: 8, deterministic_commit_count: 4 })]
+		};
+		const { getByTestId } = render(PracticeNumbersView, { data: withDeterministic });
+		expect(within(getByTestId('project-table')).getByText('8 (4 deterministic)')).toBeInTheDocument();
 	});
 
 	it('renders the amortization-unconfigured note in the rate table when unconfigured', () => {

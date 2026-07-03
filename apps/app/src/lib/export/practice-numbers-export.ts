@@ -7,7 +7,7 @@
  * wants the real generated content.
  */
 
-import { formatUsd } from '../format';
+import { formatUsd, formatCommitCell } from '../format';
 import { METHODOLOGY, type PracticeNumbersData, type ProjectRow } from '../practice-numbers-shared';
 
 function windowLabel(data: PracticeNumbersData): string {
@@ -42,7 +42,7 @@ export function buildPracticeNumbersMarkdown(data: PracticeNumbersData): string 
 	} else {
 		for (const row of data.projects) {
 			lines.push(
-				`| ${row.name} | ${row.kind} | ${row.session_count} | ${formatUsd(row.estimated_cost)} | ${amortizedCell(row, data.amortizationConfigured)} | ${row.commit_count} | ${row.merge_count} |`
+				`| ${row.name} | ${row.kind} | ${row.session_count} | ${formatUsd(row.estimated_cost)} | ${amortizedCell(row, data.amortizationConfigured)} | ${formatCommitCell(row.commit_count, row.deterministic_commit_count)} | ${row.merge_count} |`
 			);
 		}
 	}
@@ -91,6 +91,7 @@ export function buildPracticeNumbersCsv(data: PracticeNumbersData): string {
 		'amortized_covered_sessions',
 		'amortized_interactive_sessions',
 		'commits',
+		'commits_deterministic',
 		'merges'
 	];
 
@@ -105,6 +106,7 @@ export function buildPracticeNumbersCsv(data: PracticeNumbersData): string {
 			row.amortized_covered_sessions,
 			row.amortized_interactive_sessions,
 			row.commit_count,
+			row.deterministic_commit_count,
 			row.merge_count
 		]
 			.map(escape)

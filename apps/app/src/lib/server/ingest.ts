@@ -43,6 +43,16 @@ export interface IngestGitEvent {
 	unitProjectPath: string | null;
 	/** Classified client-side from `%P` parent-hash count (src/lib/importers/git-log.ts) — 2+ parents = merge. */
 	isMerge: boolean;
+	/**
+	 * Session id resolved from a LOCAL `refs/notes/quantifai` git-note on the
+	 * importer's machine (src/lib/importers/git-notes.ts) — deterministic
+	 * linkage, ADR-0004. Notes never leave the machine that wrote them unless
+	 * explicitly pushed, so the importer resolves this client-side and ships
+	 * the result; the server has no way to read a note it was never sent.
+	 * When present, this always wins over the server's own time-window join
+	 * for the same commit.
+	 */
+	noteSessionId?: string | null;
 }
 
 export interface IngestBatch {
@@ -56,7 +66,8 @@ export interface IngestResult {
 	unitsOfWork: number;
 	sessions: number;
 	messages: { accepted: number; errors: number };
-	gitEvents: { accepted: number; linked: number };
+	/** `linked` counts every git_event that ended up with a session_id, by either method; `deterministic` is the git-notes subset of `linked`. */
+	gitEvents: { accepted: number; linked: number; deterministic: number };
 }
 
 export class IngestBatchTooLargeError extends Error {}
@@ -107,29 +118,40 @@ export async function processIngestBatch(db: D1Database, batch: IngestBatch): Pr
 	}
 
 	// 4. Git events — look up (never create) the unit_id, same rule as
-	// scripts/import-git-events.ts — then do the time-window join against
-	// this project's sessions server-side (ADR-0004: honest v0, no
-	// cryptographic link; ADR-0005: no row cap means no reason to push this
-	// join onto the importer's machine).
+	// scripts/import-git-events.ts. A commit with a client-resolved
+	// `noteSessionId` (a local git-notes record — deterministic, ADR-0004)
+	// uses that directly and skips the join; everything else falls back to
+	// the server-side time-window join (ADR-0005: no row cap means no reason
+	// to push that join onto the importer's machine).
 	let gitEventsAccepted = 0;
 	let gitEventsLinked = 0;
+	let gitEventsDeterministic = 0;
 	const windowCache = new Map<string, Awaited<ReturnType<typeof sessionWindowsForProject>>>();
 	for (const event of batch.gitEvents ?? []) {
 		const unitId =
 			(event.unitProjectPath && unitIdByPath.get(event.unitProjectPath)) ??
 			(event.unitProjectPath ? await findUnitIdByProjectPath(db, event.unitProjectPath) : null);
 
-		let windows = event.unitProjectPath ? windowCache.get(event.unitProjectPath) : undefined;
-		if (event.unitProjectPath && !windows) {
-			windows = await sessionWindowsForProject(db, event.unitProjectPath);
-			windowCache.set(event.unitProjectPath, windows);
+		let sessionId: string | null;
+		let linkMethod: 'git_notes' | 'time_window';
+		if (event.noteSessionId) {
+			sessionId = event.noteSessionId;
+			linkMethod = 'git_notes';
+		} else {
+			let windows = event.unitProjectPath ? windowCache.get(event.unitProjectPath) : undefined;
+			if (event.unitProjectPath && !windows) {
+				windows = await sessionWindowsForProject(db, event.unitProjectPath);
+				windowCache.set(event.unitProjectPath, windows);
+			}
+			const match = windows
+				? findSessionForCommit(
+						{ sha: event.commitSha, authoredAt: event.authoredAt, message: event.message ?? '' },
+						windows
+					)
+				: null;
+			sessionId = match?.sessionId ?? null;
+			linkMethod = 'time_window';
 		}
-		const match = windows
-			? findSessionForCommit(
-					{ sha: event.commitSha, authoredAt: event.authoredAt, message: event.message ?? '' },
-					windows
-				)
-			: null;
 
 		await upsertGitEvent(db, {
 			repo: event.repo,
@@ -137,18 +159,19 @@ export async function processIngestBatch(db: D1Database, batch: IngestBatch): Pr
 			authoredAt: event.authoredAt,
 			message: event.message,
 			unitId: unitId ?? null,
-			sessionId: match?.sessionId ?? null,
-			linkMethod: 'time_window',
+			sessionId,
+			linkMethod,
 			isMerge: event.isMerge
 		});
 		gitEventsAccepted += 1;
-		if (match) gitEventsLinked += 1;
+		if (sessionId) gitEventsLinked += 1;
+		if (linkMethod === 'git_notes') gitEventsDeterministic += 1;
 	}
 
 	return {
 		unitsOfWork: unitIdByPath.size,
 		sessions: sessionsWritten,
 		messages: { accepted: messagesAccepted, errors: messageErrors },
-		gitEvents: { accepted: gitEventsAccepted, linked: gitEventsLinked }
+		gitEvents: { accepted: gitEventsAccepted, linked: gitEventsLinked, deterministic: gitEventsDeterministic }
 	};
 }

@@ -97,9 +97,23 @@ export function syncStatusLabel(status: 'ok' | 'error' | 'not_connected' | 'neve
 	}
 }
 
-export function formatCommitCount(n: number): string {
+/**
+ * `deterministic` is the git-notes-linked subset of `n` (ADR-0004: the
+ * git-notes mechanism, vs. the time-window fallback for the rest) — surfaced
+ * inline rather than as a separate metric/badge (DESIGN.md rule 4: one clear
+ * signal). Omitted from the sentence when zero, so pre-hook history (which
+ * is all of it, until the hook has been running a while) reads exactly as
+ * it did before this existed.
+ */
+export function formatCommitCount(n: number, deterministic = 0): string {
 	if (n === 0) return 'no commits linked';
-	return n === 1 ? '1 commit' : `${n} commits`;
+	const base = n === 1 ? '1 commit' : `${n} commits`;
+	return deterministic > 0 ? `${base} (${deterministic} deterministic)` : base;
+}
+
+/** Same linkage-quality signal as formatCommitCount, but for a bare table cell that already sits under a "Commits"/"Output (commits)" header — no need to repeat the word. */
+export function formatCommitCell(n: number, deterministic = 0): string {
+	return deterministic > 0 ? `${n} (${deterministic} deterministic)` : String(n);
 }
 
 export function formatSessionCount(n: number): string {
