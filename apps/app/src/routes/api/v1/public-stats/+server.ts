@@ -1,11 +1,10 @@
 /**
  * GET /api/v1/public-stats — grand-total aggregates only (src/lib/server/
- * public-stats.ts). Reachable on every host (apex, app.quantifai.app,
- * workers.dev): it already falls under the existing "/api/v1/*" Cloudflare
- * Access bypass application for app.quantifai.app/workers.dev, and the
- * public apex has no Access app at all, so this is unauthenticated
- * everywhere by design — it discloses nothing but grand totals (DESIGN.md
- * extended: client-adjacent data never leaves the ledger).
+ * public-stats.ts). Reachable on every host: `/api/v1*` sits on the
+ * Cloudflare Access BYPASS application on both quantifai.app and
+ * workers.dev, so this is unauthenticated everywhere by design — it
+ * discloses nothing but grand totals (DESIGN.md extended: client-adjacent
+ * data never leaves the ledger).
  *
  * Cached aggressively per the spec: a `Cache-Control` header for edge/
  * browser caching, plus a short in-Worker memoization so a burst of landing-

@@ -90,7 +90,7 @@ describe('LandingView — fixed copy (DESIGN.md-adjacent spec, no new claims)', 
 			getByText('Built in the open by Signal x Studio. QuantifAI is the instrument it measures itself with.')
 		).toBeInTheDocument();
 		const link = getByRole('link', { name: 'Operator sign-in' });
-		expect(link).toHaveAttribute('href', 'https://app.quantifai.app');
+		expect(link).toHaveAttribute('href', '/ledger');
 	});
 
 	it('handles a null lastUpdated (fresh instance) without throwing', () => {

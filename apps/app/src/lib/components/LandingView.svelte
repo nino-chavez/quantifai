@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { formatUsd } from '$lib/format';
+	import { resolve } from '$app/paths';
 	import type { PublicStats } from '$lib/server/public-stats';
 
 	let { stats, turnstileSiteKey }: { stats: PublicStats; turnstileSiteKey: string } = $props();
@@ -10,12 +11,22 @@
 	let email = $state('');
 	let note = $state('');
 
-	// Same-origin first (the zone quantifai.app serves this Worker directly);
-	// fall back to the workers.dev host if the zone's WAF ever intercepts the
-	// POST with a non-JSON block page (found pre-launch — see the +server.ts
-	// module header). CORS is enabled on the endpoint for exactly this case.
-	const WAITLIST_PRIMARY_URL = '/api/v1/waitlist';
-	const WAITLIST_FALLBACK_URL = 'https://quantifai-app.biq.workers.dev/api/v1/waitlist';
+	// Cross-origin POST to workers.dev is the DOCUMENTED PRIMARY on the live
+	// zone, not a fallback: the quantifai.app zone WAF serves a block page on
+	// POSTs to the apex — verified live 2026-07-04 with a real Chromium
+	// browser holding a valid Turnstile token, so it applies to legitimate
+	// form posts, not just bot-shaped traffic (README "Deploy" section). The
+	// same rule applies to ANY future in-app POST from a quantifai.app page.
+	// CORS on the endpoint is configured for exactly this. Off the zone
+	// (local dev, workers.dev itself) same-origin has no WAF and is used
+	// directly; each side keeps the other as a content-type-sniffed fallback
+	// so a WAF-rule change never strands the form.
+	const WORKERS_DEV_WAITLIST_URL = 'https://quantifai-app.biq.workers.dev/api/v1/waitlist';
+	const onZone =
+		typeof location !== 'undefined' &&
+		(location.hostname === 'quantifai.app' || location.hostname === 'www.quantifai.app');
+	const WAITLIST_PRIMARY_URL = onZone ? WORKERS_DEV_WAITLIST_URL : '/api/v1/waitlist';
+	const WAITLIST_FALLBACK_URL = onZone ? '/api/v1/waitlist' : WORKERS_DEV_WAITLIST_URL;
 
 	function getTurnstileToken(form: HTMLFormElement): string | null {
 		const input = form.querySelector<HTMLInputElement>('[name="cf-turnstile-response"]');
@@ -233,7 +244,7 @@
 
 	<footer class="flex flex-wrap items-center justify-between gap-4 border-t border-[var(--color-border)] pt-8 text-sm text-[var(--color-text-muted)]">
 		<p>Built in the open by Signal x Studio. QuantifAI is the instrument it measures itself with.</p>
-		<a href="https://app.quantifai.app" class="text-[var(--color-usage-blue)] hover:underline">Operator sign-in</a>
+		<a href={resolve('/ledger')} class="text-[var(--color-usage-blue)] hover:underline">Operator sign-in</a>
 	</footer>
 </div>
 

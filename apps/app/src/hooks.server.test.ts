@@ -8,7 +8,7 @@ function makeArg(url: string, resolve = vi.fn().mockResolvedValue(new Response('
 	return { event: { url: new URL(url) }, resolve } as unknown as HandleArg;
 }
 
-describe('handle — host-split routing (this task: public landing vs. app-host redirect)', () => {
+describe('handle — hostname canonicalization (single human hostname, path routes)', () => {
 	it('redirects www.quantifai.app to the identical path+query on the apex, 308, without calling resolve', async () => {
 		const resolve = vi.fn();
 		const { event } = makeArg('https://www.quantifai.app/foo?x=1', resolve);
@@ -19,51 +19,44 @@ describe('handle — host-split routing (this task: public landing vs. app-host 
 		expect(res.headers.get('location')).toBe('https://quantifai.app/foo?x=1');
 	});
 
-	it('resolves "/" directly on the apex (the public landing, remapped by reroute)', async () => {
-		const arg = makeArg('https://quantifai.app/');
-		await handle(arg);
-		expect(arg.resolve).toHaveBeenCalledWith(arg.event);
+	it("301s the deprecated app.quantifai.app root to /ledger on the apex (that host's root was the ledger)", async () => {
+		const resolve = vi.fn();
+		const { event } = makeArg('https://app.quantifai.app/', resolve);
+		const res = await handle({ event, resolve } as HandleArg);
+
+		expect(resolve).not.toHaveBeenCalled();
+		expect(res.status).toBe(301);
+		expect(res.headers.get('location')).toBe('https://quantifai.app/ledger');
 	});
 
-	it('resolves the public API routes directly on the apex', async () => {
-		for (const path of ['/api/v1/public-stats', '/api/v1/waitlist']) {
+	it('301s any other app.quantifai.app path to the same path+query on the apex', async () => {
+		const resolve = vi.fn();
+		const { event } = makeArg('https://app.quantifai.app/practice-numbers?window=30', resolve);
+		const res = await handle({ event, resolve } as HandleArg);
+
+		expect(resolve).not.toHaveBeenCalled();
+		expect(res.status).toBe(301);
+		expect(res.headers.get('location')).toBe('https://quantifai.app/practice-numbers?window=30');
+	});
+
+	it('resolves every apex path directly — no host-based route split (Access gates /ledger and /practice-numbers at the edge)', async () => {
+		for (const path of [
+			'/',
+			'/ledger',
+			'/practice-numbers',
+			'/api/v1/public-stats',
+			'/api/v1/ingest',
+			'/_app/immutable/x.js'
+		]) {
 			const arg = makeArg(`https://quantifai.app${path}`);
 			await handle(arg);
 			expect(arg.resolve).toHaveBeenCalledWith(arg.event);
 		}
 	});
 
-	it('resolves built static asset paths directly on the apex', async () => {
-		for (const path of ['/_app/immutable/chunks/abc.js', '/favicon.svg', '/robots.txt']) {
-			const arg = makeArg(`https://quantifai.app${path}`);
-			await handle(arg);
-			expect(arg.resolve).toHaveBeenCalledWith(arg.event);
-		}
-	});
-
-	it('redirects any other apex path to the same path+query on app.quantifai.app, 302, without calling resolve', async () => {
-		const resolve = vi.fn();
-		const { event } = makeArg('https://quantifai.app/practice-numbers?window=30', resolve);
-		const res = await handle({ event, resolve } as HandleArg);
-
-		expect(resolve).not.toHaveBeenCalled();
-		expect(res.status).toBe(302);
-		expect(res.headers.get('location')).toBe('https://app.quantifai.app/practice-numbers?window=30');
-	});
-
-	it('redirects a private API path (e.g. /api/v1/ingest) on the apex to the app host', async () => {
-		const resolve = vi.fn();
-		const { event } = makeArg('https://quantifai.app/api/v1/ingest', resolve);
-		const res = await handle({ event, resolve } as HandleArg);
-
-		expect(resolve).not.toHaveBeenCalled();
-		expect(res.status).toBe(302);
-		expect(res.headers.get('location')).toBe('https://app.quantifai.app/api/v1/ingest');
-	});
-
-	it('leaves app.quantifai.app and the workers.dev host untouched — falls through to resolve()', async () => {
-		for (const host of ['https://app.quantifai.app/', 'https://quantifai-app.biq.workers.dev/']) {
-			const arg = makeArg(host);
+	it('leaves the workers.dev importer/API host untouched — falls through to resolve()', async () => {
+		for (const path of ['/', '/ledger', '/api/v1/health']) {
+			const arg = makeArg(`https://quantifai-app.biq.workers.dev${path}`);
 			await handle(arg);
 			expect(arg.resolve).toHaveBeenCalledWith(arg.event);
 		}

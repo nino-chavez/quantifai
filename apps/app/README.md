@@ -113,34 +113,48 @@ npm run db:migrate:remote    # applies migrations/*.sql to the hosted D1 databas
 wrangler secret put INGEST_API_KEY_HASH   # SHA-256 hex of the ingest Bearer key
 ```
 
-Canonical **browser** hostname is **app.quantifai.app** (zone route +
-explicit proxied A/AAAA on the `quantifai.app` zone — deliberately NOT a
-Workers custom domain: the managed record served AAAA-only with zero A
-answers, breaking IPv4 clients; found 2026-07-03).
+Canonical **human** hostname is **quantifai.app** (single hostname, path
+routes — consolidation of 2026-07-04): `/` is the public landing, `/ledger`
+and `/practice-numbers` are the Access-gated operator surfaces, `/api/v1/*`
+carries in-app auth under an Access bypass. Zone routes + explicit proxied
+A/AAAA records, deliberately NOT a Workers custom domain (the managed
+record served AAAA-only with zero A answers, breaking IPv4 clients; found
+2026-07-03). The apex/www DNS records still CNAME to the retired
+`quantifai-landing.pages.dev` Pages project — the Worker routes shadow it,
+and removing them from `wrangler.jsonc` is the instant rollback.
 
-Canonical **importer/API** hostname is **quantifai-app.biq.workers.dev**
+**app.quantifai.app is DEPRECATED** (the "app.app" subdomain stutter): it
+serves only a 301 to the same path on `quantifai.app` (its old root `/` maps
+to `/ledger`). Its DNS records + zone route exist only for that redirect;
+Access no longer covers it — the redirect targets are what's gated.
+
+Canonical **importer/API + POST** hostname is **quantifai-app.biq.workers.dev**
 (`QUANTIFAI_API_URL`): the `quantifai.app` zone carries a security rule
 (landing-era, unreadable with current API tokens) that serves a Cloudflare
-block page on non-browser POSTs, so `POST /api/v1/ingest` 403s on the
-custom domain while working on workers.dev, which is off-zone. If that WAF
-rule is ever removed (dashboard: Security → WAF → custom rules), the split
-can collapse to one hostname. Both hostnames route to the same Worker and
-carry identical Access coverage (see below).
+block page on POSTs — verified live 2026-07-04 to hit even a real browser
+holding a valid Turnstile token, not just non-browser clients. So ALL
+programmatic POSTs (`/api/v1/ingest`, `/api/v1/sync-providers`) AND
+browser-page POSTs (the landing's waitlist form, any future in-app POST)
+go cross-origin to workers.dev, which is off-zone; the waitlist endpoint
+sets CORS headers for the `quantifai.app`/`www` origins for exactly this.
+If that WAF rule is ever removed (dashboard: Security → WAF → custom
+rules), the split can collapse to one hostname — the client keeps a
+same-origin fallback so no code change would be needed.
 
-Both hostnames sit behind Cloudflare Access (Zero Trust org
-`quantifai-next.cloudflareaccess.com`, OTP IdP for the operator email), with
-two Access applications extended to cover both domains:
+Access (Zero Trust org `quantifai-next.cloudflareaccess.com`, OTP IdP for
+the operator email), two applications:
 - **`quantifai-app — ledger`** — allow policy (operator email + service
-  token) covering the app root on both `app.quantifai.app` and
-  `*.biq.workers.dev`.
+  token) covering `quantifai-app.biq.workers.dev` (whole host) plus the
+  path-scoped destinations `quantifai.app/ledger*` and
+  `quantifai.app/practice-numbers*`. The apex root (landing) and its
+  assets are deliberately NOT covered — the landing is public.
 - **`quantifai-app — ingest/health (bypass)`** — bypass policy covering
-  `/api/v1/*` on both hostnames (the ingest endpoint is Bearer-key gated
-  in-app, not by Access).
+  `/api/v1*` on workers.dev and `quantifai.app` (the ingest endpoint is
+  Bearer-key gated in-app, not by Access).
 
-Adding a hostname to the Worker without first extending both Access
-applications would serve the ledger unauthenticated — always confirm Access
-coverage for a new hostname before attaching it as a custom domain in
-`wrangler.jsonc`.
+Adding a gated path/hostname to the Worker without first extending the
+Access applications would serve the ledger unauthenticated — always confirm
+Access coverage BEFORE the routing change deploys.
 
 ## Test
 
@@ -171,9 +185,13 @@ npx playwright test             # @smoke e2e — builds and runs against `wrangl
   parser (no dependency on the `blueprint` tool).
 - `src/lib/pricing/anthropic-pricing.ts` — the model pricing table (list-price
   token valuation, not a metered bill — see the file header).
-- `src/routes/+page.svelte` — the `unit-of-work-ledger` page (DESIGN.md L4),
-  gated by Cloudflare Access in production (see the initiative's final
-  report for the Access application config).
+- `src/routes/+page.svelte` — the public landing page (root route on every
+  host): live proof strip from `/api/v1/public-stats`, honesty block, and
+  the Turnstile-verified waitlist form (`/api/v1/waitlist`, POSTed
+  cross-origin to workers.dev — see "Deploy" above for why).
+- `src/routes/ledger/` — the `unit-of-work-ledger` page (DESIGN.md L4),
+  gated in production by the path-scoped Cloudflare Access destination
+  `quantifai.app/ledger*` (see "Deploy" above).
 - `src/routes/practice-numbers/` — the `practice-numbers` page (DESIGN.md L4,
   JTBD-3): per-project/initiative cost+output and practice-level rates
   (commits/merges/sessions/cost per week) over a 30/90/all-time window, with

@@ -3,14 +3,14 @@
  * re-target). Public, Turnstile-verified server-side (src/lib/server/
  * turnstile.ts); writes to D1 `waitlist_signups` (src/lib/server/waitlist.ts).
  *
- * CORS: this route is reachable both same-origin (a browser on
- * https://quantifai.app posting to a relative `/api/v1/waitlist`, which
- * resolves on the zone) and cross-origin (the documented fallback if the
- * zone's WAF 403s a same-origin POST — the client then posts straight to
- * `https://quantifai-app.biq.workers.dev/api/v1/waitlist`, which has no such
- * WAF rule). CORS headers are always set so both paths work without a
- * second deploy once we learn which one the WAF actually blocks; see
- * src/lib/components/LandingView.svelte for the client-side try/fallback.
+ * CORS: the cross-origin POST from a quantifai.app page to this route on
+ * `https://quantifai-app.biq.workers.dev` is the DOCUMENTED PRIMARY path —
+ * the quantifai.app zone WAF serves a block page on POSTs to the apex,
+ * verified live 2026-07-04 even from a real browser with a valid Turnstile
+ * token (README "Deploy" section; the rule is unreadable/unremovable with
+ * current API tokens). Same-origin remains supported for local dev and as a
+ * fallback should the WAF rule ever be removed; see
+ * src/lib/components/LandingView.svelte for the client-side selection.
  */
 
 import { json } from '@sveltejs/kit';

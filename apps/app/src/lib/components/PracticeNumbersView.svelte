@@ -47,7 +47,7 @@
 			<h1 class="font-display mt-2 text-2xl font-semibold text-[var(--color-text)]">
 				The positioning-bracket export
 			</h1>
-			<a href={resolve('/')} class="mt-3 inline-block text-sm text-[var(--color-usage-blue)] hover:underline">
+			<a href={resolve('/ledger')} class="mt-3 inline-block text-sm text-[var(--color-usage-blue)] hover:underline">
 				&larr; Back to ledger
 			</a>
 		</div>
