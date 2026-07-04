@@ -123,10 +123,10 @@ record served AAAA-only with zero A answers, breaking IPv4 clients; found
 `quantifai-landing.pages.dev` Pages project — the Worker routes shadow it,
 and removing them from `wrangler.jsonc` is the instant rollback.
 
-**app.quantifai.app is DEPRECATED** (the "app.app" subdomain stutter): it
-serves only a 301 to the same path on `quantifai.app` (its old root `/` maps
-to `/ledger`). Its DNS records + zone route exist only for that redirect;
-Access no longer covers it — the redirect targets are what's gated.
+**app.quantifai.app no longer exists** (removed 2026-07-04 — no users
+existed to need a redirect): no route, no DNS records, no Access coverage.
+It briefly existed during the 2026-07-03 consolidation; nothing references
+it.
 
 Canonical **importer/API + POST** hostname is **quantifai-app.biq.workers.dev**
 (`QUANTIFAI_API_URL`): the `quantifai.app` zone carries a security rule

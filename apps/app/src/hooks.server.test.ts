@@ -19,26 +19,6 @@ describe('handle — hostname canonicalization (single human hostname, path rout
 		expect(res.headers.get('location')).toBe('https://quantifai.app/foo?x=1');
 	});
 
-	it("301s the deprecated app.quantifai.app root to /ledger on the apex (that host's root was the ledger)", async () => {
-		const resolve = vi.fn();
-		const { event } = makeArg('https://app.quantifai.app/', resolve);
-		const res = await handle({ event, resolve } as HandleArg);
-
-		expect(resolve).not.toHaveBeenCalled();
-		expect(res.status).toBe(301);
-		expect(res.headers.get('location')).toBe('https://quantifai.app/ledger');
-	});
-
-	it('301s any other app.quantifai.app path to the same path+query on the apex', async () => {
-		const resolve = vi.fn();
-		const { event } = makeArg('https://app.quantifai.app/practice-numbers?window=30', resolve);
-		const res = await handle({ event, resolve } as HandleArg);
-
-		expect(resolve).not.toHaveBeenCalled();
-		expect(res.status).toBe(301);
-		expect(res.headers.get('location')).toBe('https://quantifai.app/practice-numbers?window=30');
-	});
-
 	it('resolves every apex path directly — no host-based route split (Access gates /ledger and /practice-numbers at the edge)', async () => {
 		for (const path of [
 			'/',

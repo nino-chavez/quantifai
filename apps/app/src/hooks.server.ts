@@ -12,10 +12,9 @@
  * hostname canonicalization:
  *
  *  - www.quantifai.app: 308 to the identical path on the apex.
- *  - app.quantifai.app: DEPRECATED (the "app.app" subdomain stutter) — 301
- *    to the same path on quantifai.app, with "/" mapping to "/ledger" since
- *    that host's root was the ledger before the consolidation. Its DNS
- *    records + zone route stay only to serve this redirect.
+ *  - app.quantifai.app: REMOVED entirely (2026-07-04, "no current users") —
+ *    no route, no DNS records, no redirect. It briefly existed during the
+ *    2026-07-03 consolidation; nothing references it.
  *  - quantifai.app, *.workers.dev, local dev: fall through to resolve().
  *    workers.dev stays the importer/API host (see README — the zone WAF
  *    403s POSTs on quantifai.app even from a real browser with a valid
@@ -30,7 +29,6 @@ import type { Handle } from '@sveltejs/kit';
 
 const APEX = 'quantifai.app';
 const WWW = 'www.quantifai.app';
-const DEPRECATED_APP_HOST = 'app.quantifai.app';
 
 export const handle: Handle = async ({ event, resolve }) => {
 	const { hostname } = event.url;
@@ -39,13 +37,6 @@ export const handle: Handle = async ({ event, resolve }) => {
 		const target = new URL(event.url);
 		target.hostname = APEX;
 		return Response.redirect(target.toString(), 308);
-	}
-
-	if (hostname === DEPRECATED_APP_HOST) {
-		const target = new URL(event.url);
-		target.hostname = APEX;
-		if (target.pathname === '/') target.pathname = '/ledger';
-		return Response.redirect(target.toString(), 301);
 	}
 
 	return resolve(event);

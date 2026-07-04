@@ -25,26 +25,17 @@
 		// (proxied, untouched) — these Worker routes take precedence over
 		// Pages, which IS the retirement mechanism; deleting the apex/www
 		// entries instantly restores the old Pages landing (rollback).
-		// MUST stay FIRST in this array: `wrangler dev` derives the local dev
-		// hostname from the first route, and src/hooks.server.ts 301s the
-		// deprecated app.quantifai.app hostname — if that one came first,
-		// every local dev/e2e request would bounce to production.
+		// The apex MUST stay FIRST in this array: `wrangler dev` derives the
+		// local dev hostname from the first route (www would 308 every local
+		// request to production otherwise).
+		// app.quantifai.app: REMOVED entirely (2026-07-04, "no current users"
+		// — operator decision). No route, no DNS records, no redirect.
 		{
 			"pattern": "quantifai.app/*",
 			"zone_name": "quantifai.app"
 		},
 		{
 			"pattern": "www.quantifai.app/*",
-			"zone_name": "quantifai.app"
-		},
-		// DEPRECATED hostname (the "app.app" subdomain stutter) — kept, with
-		// its proxied A/AAAA placeholder records, ONLY so src/hooks.server.ts
-		// can serve the 301 to the same path on quantifai.app; no content
-		// renders on this host anymore. Access coverage for it was dropped
-		// when the redirect shipped (2026-07-04, single-hostname
-		// consolidation) — the redirect TARGET paths are what's gated now.
-		{
-			"pattern": "app.quantifai.app/*",
 			"zone_name": "quantifai.app"
 		}
 	],
