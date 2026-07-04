@@ -26,6 +26,20 @@ declare global {
 				OPENAI_ADMIN_API_KEY?: string;
 				/** OpenRouter API key — src/lib/providers/openrouter.ts. Absent: provider renders "not connected" (DESIGN.md rule 7). */
 				OPENROUTER_API_KEY?: string;
+				/**
+				 * Turnstile widget site key (public, not a secret) for the public
+				 * landing's waitlist form — see wrangler.jsonc `vars`, 1Password item
+				 * "Cloudflare Turnstile quantifai-app" (field `site_key`).
+				 */
+				TURNSTILE_SITE_KEY?: string;
+				/**
+				 * Turnstile secret, set via `wrangler secret put TURNSTILE_SECRET_KEY`
+				 * — never committed. 1Password item "Cloudflare Turnstile
+				 * quantifai-app" (field `secret_key`). Absent: verifyTurnstile()
+				 * passes everything (local dev fallback) — see
+				 * src/lib/server/turnstile.ts.
+				 */
+				TURNSTILE_SECRET_KEY?: string;
 			};
 		}
 	}

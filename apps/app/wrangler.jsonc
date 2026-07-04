@@ -19,11 +19,34 @@
 		{
 			"pattern": "app.quantifai.app/*",
 			"zone_name": "quantifai.app"
+		},
+		// Public-landing retirement of quantifai-landing.pages.dev (this task):
+		// the apex + www DNS records stay CNAMEd to the Pages project (proxied,
+		// untouched) — these Worker routes take precedence over Pages on a
+		// hostname match, which IS the retirement mechanism. Instantly
+		// reversible by deleting these two route entries (Pages project stays
+		// as rollback). Verified 2026-07-03: no Zero Trust Access application
+		// covers the bare apex/www (both existing Access apps scope only to
+		// app.quantifai.app / *.workers.dev) — src/hooks.server.ts does the
+		// actual public-landing-vs-redirect-to-app split per hostname.
+		{
+			"pattern": "quantifai.app/*",
+			"zone_name": "quantifai.app"
+		},
+		{
+			"pattern": "www.quantifai.app/*",
+			"zone_name": "quantifai.app"
 		}
 	],
 	"assets": {
 		"binding": "ASSETS",
 		"directory": ".svelte-kit/cloudflare"
+	},
+	// Turnstile site key — public by design (unlike TURNSTILE_SECRET_KEY, set
+	// via `wrangler secret put`, never committed). 1Password item "Cloudflare
+	// Turnstile quantifai-app" (Developer Secrets), field `site_key`.
+	"vars": {
+		"TURNSTILE_SITE_KEY": "0x4AAAAAADVDHGNkFrASuDF5"
 	},
 	"d1_databases": [
 		{
