@@ -22,7 +22,14 @@ const MIGRATIONS_DIR = path.resolve(__dirname, '..', '..', '..', '..', 'migratio
 
 function migrationFiles(): string[] {
 	// Sequential, numbered migrations — same ordering wrangler applies them in.
-	return ['0001_initial_schema.sql', '0002_subscription_plans.sql', '0003_git_events_merge_flag.sql', '0004_provider_costs.sql'];
+	return [
+		'0001_initial_schema.sql',
+		'0002_subscription_plans.sql',
+		'0003_git_events_merge_flag.sql',
+		'0004_provider_costs.sql',
+		'0005_openrouter_activity_cleanup.sql',
+		'0006_waitlist_signups.sql'
+	];
 }
 
 export function createFakeD1(): D1Database {
@@ -42,8 +49,15 @@ export function createFakeD1(): D1Database {
 					return this;
 				},
 				async run() {
-					stmt.run(...boundArgs);
-					return { success: true } as unknown;
+					// node:sqlite's run() returns { changes, lastInsertRowid } — surfaced
+					// as D1's meta.changes so callers can detect an `ON CONFLICT DO
+					// NOTHING` no-op (changes === 0) the same way real D1 reports it
+					// (src/lib/server/waitlist.ts's dupe-email detection relies on this).
+					const info = stmt.run(...boundArgs);
+					return {
+						success: true,
+						meta: { changes: Number(info.changes ?? 0) }
+					} as unknown;
 				},
 				async first<T>() {
 					return (stmt.get(...boundArgs) as T | undefined) ?? null;

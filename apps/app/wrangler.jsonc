@@ -16,6 +16,33 @@
 	// adding `routes` disables workers.dev by default unless this is set.
 	"workers_dev": true,
 	"routes": [
+		// The single human hostname: "/" = public landing, "/ledger" +
+		// "/practice-numbers" = operator surfaces gated by PATH-scoped
+		// Cloudflare Access destinations (quantifai.app/ledger* and
+		// quantifai.app/practice-numbers* on the "quantifai-app — ledger"
+		// Zero Trust app; quantifai.app/api/v1* sits on the bypass app).
+		// The apex + www DNS records stay CNAMEd to the retired Pages project
+		// (proxied, untouched) — these Worker routes take precedence over
+		// Pages, which IS the retirement mechanism; deleting the apex/www
+		// entries instantly restores the old Pages landing (rollback).
+		// MUST stay FIRST in this array: `wrangler dev` derives the local dev
+		// hostname from the first route, and src/hooks.server.ts 301s the
+		// deprecated app.quantifai.app hostname — if that one came first,
+		// every local dev/e2e request would bounce to production.
+		{
+			"pattern": "quantifai.app/*",
+			"zone_name": "quantifai.app"
+		},
+		{
+			"pattern": "www.quantifai.app/*",
+			"zone_name": "quantifai.app"
+		},
+		// DEPRECATED hostname (the "app.app" subdomain stutter) — kept, with
+		// its proxied A/AAAA placeholder records, ONLY so src/hooks.server.ts
+		// can serve the 301 to the same path on quantifai.app; no content
+		// renders on this host anymore. Access coverage for it was dropped
+		// when the redirect shipped (2026-07-04, single-hostname
+		// consolidation) — the redirect TARGET paths are what's gated now.
 		{
 			"pattern": "app.quantifai.app/*",
 			"zone_name": "quantifai.app"
@@ -24,6 +51,12 @@
 	"assets": {
 		"binding": "ASSETS",
 		"directory": ".svelte-kit/cloudflare"
+	},
+	// Turnstile site key — public by design (unlike TURNSTILE_SECRET_KEY, set
+	// via `wrangler secret put`, never committed). 1Password item "Cloudflare
+	// Turnstile quantifai-app" (Developer Secrets), field `site_key`.
+	"vars": {
+		"TURNSTILE_SITE_KEY": "0x4AAAAAADVDHGNkFrASuDF5"
 	},
 	"d1_databases": [
 		{

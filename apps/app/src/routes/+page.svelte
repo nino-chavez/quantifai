@@ -1,12 +1,16 @@
 <script lang="ts">
-	import LedgerView from '$lib/components/LedgerView.svelte';
-	import type { PageData } from './$types';
+	import LandingView from '$lib/components/LandingView.svelte';
+	import type { PublicStats } from '$lib/server/public-stats';
 
-	let { data }: { data: PageData } = $props();
+	let { data }: { data: { stats: PublicStats; turnstileSiteKey: string } } = $props();
 </script>
 
 <svelte:head>
-	<title>QuantifAI — practice ledger</title>
+	<title>QuantifAI — what your practice cost, and what it produced</title>
+	<meta
+		name="description"
+		content="QuantifAI prices AI-assisted work at the unit of work and pairs every dollar with the commits it produced."
+	/>
 </svelte:head>
 
-<LedgerView data={data.ledger} />
+<LandingView stats={data.stats} turnstileSiteKey={data.turnstileSiteKey} />

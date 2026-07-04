@@ -10,7 +10,9 @@ import { test, expect } from '@playwright/test';
  */
 
 test('@smoke ledger renders practice total, unit rows, and provenance disclosure', async ({ page }) => {
-	await page.goto('/');
+	// Single-hostname consolidation: the ledger moved from "/" to "/ledger"
+	// ("/" is now the public landing on every host).
+	await page.goto('/ledger');
 
 	await expect(page.getByRole('heading', { name: /what your practice cost/i })).toBeVisible();
 
