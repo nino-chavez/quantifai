@@ -9,7 +9,7 @@ Date: 2026-07-03 · Synthesizes four sweeps (provider-API feasibility, dedicated
 | KQ-a | AI Ops owner declines a walkthrough | **OPEN — operator task.** Blocks Stage 3 investment, not Stage 2 planning. | Interview is proxy-only; owner is "AI Ops that reports to CFO" |
 | KQ-b | Provider APIs can't deliver per-developer cost cleanly | **PASS with constraints.** Org rollup: 4/4 providers API-feedable (ChatGPT Enterprise *seat* spend needs CSV/invoice). Real per-dev $: 2/4 (Anthropic, Cursor-Enterprise); Copilot/ChatGPT per-dev is allocation. | `provider-api-feasibility.md` |
 | KQ-c | A vendor already nails it | **NO — with one verification flag.** None of Larridin/Torii/Olakai/Finout demonstrably ships cross-provider per-dev seat+token; DX's claim is closest and must be fact-checked (Stage 4) before any strategy doc calls the gap open. | `dedicated-vendors.md` |
-| KQ-d | No budget-line pain at Commerce.com | **OPEN.** Interview: no trigger incident — demand is anticipated. Test directly in the owner walkthrough (does the CFO org track AI spend as a budget line?). | Interview Q4 |
+| KQ-d | No budget-line pain at the employer | **OPEN.** Interview: no trigger incident — demand is anticipated. Test directly in the owner walkthrough (does the CFO org track AI spend as a budget line?). | Interview Q4 |
 
 Net Stage 1 posture: research supports proceeding to Stage 2 (Design Principles) now; Stage 3 (prototype build) is gated on KQ-a/KQ-d — the owner walkthrough resolves both.
 
@@ -84,4 +84,4 @@ The pilot re-targeted same-day from `commerce-ai-ops-cfo` to `solo-operator-prac
 
 ## Handoff to Stage 2
 
-Inputs ready: DP-1..6 above, the pilot's first screen (org spend rollup + trend + threshold, interview Q5), inherited component inventory (sibling scan), Finout grid ordering, insight-card list. Pending operator tasks carried forward: (1) AI Ops owner walkthrough (KQ-a/KQ-d — gates Stage 3), (2) live Copilot per-user billing test on a Business/Enterprise org (decides Copilot drill-down grain), (3) confirm Commerce.com's Cursor plan tier (Enterprise-gated APIs), (4) Stage 4 fact-check of DX's actual grain.
+Inputs ready: DP-1..6 above, the pilot's first screen (org spend rollup + trend + threshold, interview Q5), inherited component inventory (sibling scan), Finout grid ordering, insight-card list. Pending operator tasks carried forward: (1) AI Ops owner walkthrough (KQ-a/KQ-d — gates Stage 3), (2) live Copilot per-user billing test on a Business/Enterprise org (decides Copilot drill-down grain), (3) confirm the employer's Cursor plan tier (Enterprise-gated APIs), (4) Stage 4 fact-check of DX's actual grain.

@@ -1,4 +1,4 @@
-# ADR-0001: Pilot profile — Commerce.com AI-tool admin, gated on a real stakeholder artifact
+# ADR-0001: Pilot profile — enterprise AI-tool admin, gated on a real stakeholder artifact (employer de-named — public repo)
 
 Status: accepted · 2026-07-03
 
@@ -8,9 +8,9 @@ This initiative is the gated successor to the retired QuantifAI builds (quantifa
 
 ## Decision
 
-Pilot: **platform-engineering lead administering AI coding tools at Commerce.com** (`commerce-ai-tool-admin`), internal-first. Chosen over the two out-of-scope buyers because (a) the July-2026 market scan shows the finance and productivity-ROI positions are held by funded players (Finout/CloudZero/Vantage; Faros/Jellyfish/DX) while cross-provider per-developer seat-plus-token attribution for an org admin is the demonstrably unclaimed slice, and (b) Commerce.com is the one deployment where a captive stakeholder exists — the retired platform's own stated target (`quantifai-platform/CLAUDE.md:3`, "Internal-first deployment at Commerce.com").
+Pilot: **platform-engineering lead administering AI coding tools at the employer** (`commerce-ai-tool-admin`), internal-first. Chosen over the two out-of-scope buyers because (a) the July-2026 market scan shows the finance and productivity-ROI positions are held by funded players (Finout/CloudZero/Vantage; Faros/Jellyfish/DX) while cross-provider per-developer seat-plus-token attribution for an org admin is the demonstrably unclaimed slice, and (b) the employer is the one deployment where a captive stakeholder exists — the retired platform's own stated target (`quantifai-platform/CLAUDE.md:3`, "Internal-first deployment" — original citation names the employer directly; de-named here).
 
-`walkthrough_citation` is deliberately empty. Per the retrospective's verdict, this initiative carries an explicit kill-gate: Stage 1 does not begin until a real artifact from a named Commerce.com stakeholder exists (interview notes, a walkthrough of how they answer AI-spend questions today, screenshots of the current process). If no stakeholder artifact materializes, the initiative ends as a documented retire — that outcome is a success condition of the gate, not a failure of the initiative.
+`walkthrough_citation` is deliberately empty. Per the retrospective's verdict, this initiative carries an explicit kill-gate: Stage 1 does not begin until a real artifact from a named enterprise stakeholder exists (interview notes, a walkthrough of how they answer AI-spend questions today, screenshots of the current process). If no stakeholder artifact materializes, the initiative ends as a documented retire — that outcome is a success condition of the gate, not a failure of the initiative.
 
 Competitors in scope are derived from this pilot (what an org admin would evaluate instead): the three provider-native admin surfaces (Anthropic Console/Claude Code Analytics, Cursor Organizations, Copilot metrics) and the three dedicated cross-provider entrants (Larridin, Torii, Olakai). They are pre-seeded from the retrospective's market scan rather than from the (not-yet-existing) walkthrough; when the citation lands, re-check each against it and re-derive per the reviewer's §6.
 

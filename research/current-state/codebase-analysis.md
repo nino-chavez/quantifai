@@ -1,8 +1,8 @@
 # Current-state analysis — what exists before this initiative writes any code
 
-Date: 2026-07-03. Two "current states" matter for this pilot: how Commerce.com answers the spend question today (from the stakeholder interview), and what the retired QuantifAI builds already implement (from the 2026-07-03 retrospective's repo-level evidence pass). Citations are to files verified during that pass.
+Date: 2026-07-03. Two "current states" matter for this pilot: how the operator's employer answers the spend question today (from the stakeholder interview), and what the retired QuantifAI builds already implement (from the 2026-07-03 retrospective's repo-level evidence pass). Citations are to files verified during that pass.
 
-## 1. Commerce.com process today (from `research/sources/stakeholder-interview-2026-07-03-nino-chavez.md`)
+## 1. Employer process today (from `research/sources/stakeholder-interview-2026-07-03-nino-chavez.md`)
 
 - Owner: AI Ops function reporting to the CFO. Interviewee (Product Architect) is adjacent champion, not owner.
 - Process: per-provider consoles + hand assembly into docs/spreadsheets. No cross-provider rollup exists.

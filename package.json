@@ -1,5 +1,5 @@
 {
-  "name": "quantifai-next-workspace",
+  "name": "quantifai-workspace",
   "private": true,
   "workspaces": [
     "apps/*",

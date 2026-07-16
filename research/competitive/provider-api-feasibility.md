@@ -22,7 +22,7 @@ Docs: [Anthropic usage/cost API](https://platform.claude.com/docs/en/manage-clau
 ## Items needing empirical verification before design commits
 
 1. **Copilot per-user billing for org-sponsored seats** (`/users/{username}/settings/billing/usage` under AI Credits) — docs ambiguous; flagged independently twice. Highest-value single test against a live Copilot Business/Enterprise account; decides whether the Copilot drill-down is real or allocation-only.
-2. **Commerce.com's Cursor plan tier** — the Admin/Analytics APIs are Enterprise-gated; if Commerce.com runs Cursor Business, the Cursor column downgrades to dashboard-CSV.
+2. **The employer's Cursor plan tier** (retired enterprise pilot, ADR-0003 — employer de-named) — the Admin/Analytics APIs are Enterprise-gated; if the employer runs Cursor Business, the Cursor column downgrades to dashboard-CSV.
 3. OpenAI help-center claims are snippet-sourced (403 on fetch) — re-verify before citing in a stakeholder-facing doc.
 
 ## Consequences for inherited code

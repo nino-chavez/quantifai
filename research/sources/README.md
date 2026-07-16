@@ -4,7 +4,7 @@ Seeded 2026-07-03 from the QuantifAI retrospective (this folder's `retrospective
 
 ## Stage 1 is BLOCKED until `pilot_profile.walkthrough_citation` is filled
 
-Per the pilot-profile lock in `blueprint.yml`: a real artifact from a named Commerce.com stakeholder (interview notes, walkthrough of how they answer AI-spend questions today, screenshots of the current process). No artifact → initiative ends at Stage 1 as a documented retire. Do not substitute an imagined user.
+Per the pilot-profile lock in `blueprint.yml`: a real artifact from a named enterprise stakeholder (interview notes, walkthrough of how they answer AI-spend questions today, screenshots of the current process). No artifact → initiative ends at Stage 1 as a documented retire. Do not substitute an imagined user.
 
 ## Salvage map (from the retired builds — reuse, don't rebuild)
 

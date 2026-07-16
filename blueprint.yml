@@ -1,11 +1,11 @@
 # Blueprint Configuration — stamped by template/tools/blueprint-init on 2026-07-03
 
 project:
-  name: "quantifai-next"
+  name: "quantifai"
   description: "Cross-provider AI spend attribution, per developer"
   product: "QuantifAI"
   audience:
-    leadership: []                  # Commerce.com stakeholder — fill when pilot profile locks
+    leadership: []                  # enterprise stakeholder — retired pilot target (ADR-0003); fill only if re-targeted
     engineering: []
     broader: []
 
@@ -57,7 +57,7 @@ portal_type: initiative
 # A typo'd path simply keeps the section hidden — it never crashes the build.
 # ──────────────────────────────────────────────────────────────────
 portal:
-  repo_url: "https://github.com/your-org/quantifai-next"
+  repo_url: "https://github.com/nino-chavez/quantifai"
   decisions:
     dir: "decisions"               # folder of NNNN-slug.md decision records (ADRs)
     # filename_pattern: "^(?:ADR-)?(\\d{4})-(.+)\\.md$"  # override the matcher if your ADRs are named differently

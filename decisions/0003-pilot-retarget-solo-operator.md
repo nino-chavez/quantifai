@@ -1,10 +1,10 @@
-# ADR-0003: Pilot re-target — AI Ops/CFO at Commerce.com → solo operator pricing their own practice
+# ADR-0003: Pilot re-target — AI Ops/CFO at the employer (de-named) → solo operator pricing their own practice
 
 Status: accepted · 2026-07-03
 
 ## Context
 
-ADR-0002 targeted the AI Ops function reporting to the CFO at Commerce.com, with an explicit kill-gate: Stage 3 blocked until that owner gave a direct walkthrough. The operator has now stated the disqualifier plainly: "we won't get feedback from commerce. i'm on my own here." KQ-a (owner walkthrough) fails permanently, not provisionally. Per ADR-0002's own terms, the enterprise-internal pilot retires. This is the gate working — the retrospective's verdict priced this outcome at one research stage, and that price was paid.
+ADR-0002 targeted the AI Ops function reporting to the CFO at the employer, with an explicit kill-gate: Stage 3 blocked until that owner gave a direct walkthrough. The operator has now stated the disqualifier plainly: "we won't get feedback from commerce. i'm on my own here." KQ-a (owner walkthrough) fails permanently, not provisionally. Per ADR-0002's own terms, the enterprise-internal pilot retires. This is the gate working — the retrospective's verdict priced this outcome at one research stage, and that price was paid.
 
 ## Decision
 

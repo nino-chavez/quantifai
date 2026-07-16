@@ -1,6 +1,6 @@
 name: CI
 
-# quantifai-next CI (apps/app). Deliberately no deploy step — deploys stay
+# quantifai CI (apps/app). Deliberately no deploy step — deploys stay
 # manual wrangler (`npm run deploy` from apps/app), per the slice-3 scope.
 
 on:
