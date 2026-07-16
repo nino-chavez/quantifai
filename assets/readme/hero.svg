@@ -1,0 +1,83 @@
+<svg xmlns="http://www.w3.org/2000/svg"
+     width="1200" height="360" viewBox="0 0 1200 360"
+     role="img" aria-labelledby="hero-title hero-desc">
+  <title id="hero-title">QuantifAI — cost and output, priced per unit of work</title>
+  <desc id="hero-desc">A ledger specimen showing two unit-of-work rows, each with a cost figure, a provenance badge (API metered or subscription amortized), and paired output counts.</desc>
+
+  <defs>
+    <clipPath id="canvas-clip">
+      <rect width="1200" height="360" rx="26"/>
+    </clipPath>
+  </defs>
+
+  <g clip-path="url(#canvas-clip)">
+    <rect width="1200" height="360" fill="#0a0a0a"/>
+    <!-- faint corner glow, restrained -->
+    <circle cx="1180" cy="20" r="220" fill="#f0c05e" opacity="0.05"/>
+  </g>
+  <rect x="0.5" y="0.5" width="1199" height="359" rx="25.5" fill="none" stroke="#2a2724"/>
+
+  <!-- Title block -->
+  <g id="title-block">
+    <text x="64" y="64" font-family="ui-monospace, 'JetBrains Mono', SFMono-Regular, monospace"
+          font-size="14" letter-spacing="1.4" fill="#a39d92">SELF-HOSTED · CLOUDFLARE WORKERS + D1</text>
+
+    <text x="62" y="152" font-family="'Space Grotesk', -apple-system, sans-serif" font-size="66" font-weight="700">
+      <tspan fill="#f4f1ec">Quantif</tspan><tspan fill="#f0c05e">AI</tspan>
+    </text>
+
+    <text x="64" y="196" font-family="-apple-system, 'Segoe UI', sans-serif" font-size="21" fill="#c7c1b6">Cost and output, priced per unit of work —</text>
+    <text x="64" y="224" font-family="-apple-system, 'Segoe UI', sans-serif" font-size="21" fill="#c7c1b6">not per calendar month.</text>
+
+    <g font-family="ui-monospace, 'JetBrains Mono', SFMono-Regular, monospace" font-size="12.5" letter-spacing="0.8" fill="#736c60">
+      <text x="64" y="300">MIT LICENSE</text>
+      <text x="182" y="300">·</text>
+      <text x="196" y="300">SOLO OPERATOR</text>
+      <text x="340" y="300">·</text>
+      <text x="354" y="300">SELF-HOSTED</text>
+    </g>
+  </g>
+
+  <!-- Ledger specimen card -->
+  <g id="ledger-specimen">
+    <rect x="660" y="48" width="480" height="264" rx="16" fill="#131210" stroke="#2a2724"/>
+
+    <text x="696" y="86" font-family="ui-monospace, 'JetBrains Mono', SFMono-Regular, monospace"
+          font-size="12.5" letter-spacing="1.2" fill="#a39d92">UNIT-OF-WORK LEDGER</text>
+    <line x1="696" y1="100" x2="1104" y2="100" stroke="#2a2724"/>
+
+    <!-- Row 1 -->
+    <g>
+      <text x="696" y="136" font-family="-apple-system, 'Segoe UI', sans-serif" font-size="17" fill="#f4f1ec">migration-cutover</text>
+      <text x="1104" y="136" text-anchor="end" font-family="ui-monospace, 'JetBrains Mono', SFMono-Regular, monospace"
+            font-size="21" font-weight="600" fill="#f0c05e">$186.40</text>
+
+      <rect x="696" y="150" width="112" height="21" rx="10.5" fill="#6fbf8c" fill-opacity="0.12" stroke="#6fbf8c" stroke-opacity="0.45"/>
+      <text x="752" y="164.5" text-anchor="middle" font-family="ui-monospace, 'JetBrains Mono', SFMono-Regular, monospace"
+            font-size="10.5" letter-spacing="0.6" fill="#6fbf8c">API METERED</text>
+
+      <text x="1104" y="164.5" text-anchor="end" font-family="ui-monospace, 'JetBrains Mono', SFMono-Regular, monospace"
+            font-size="12.5" fill="#a39d92">14 commits · 6 sessions</text>
+    </g>
+
+    <line x1="696" y1="192" x2="1104" y2="192" stroke="#211f1c"/>
+
+    <!-- Row 2 -->
+    <g>
+      <text x="696" y="228" font-family="-apple-system, 'Segoe UI', sans-serif" font-size="17" fill="#f4f1ec">client-onboarding-flow</text>
+      <text x="1104" y="228" text-anchor="end" font-family="ui-monospace, 'JetBrains Mono', SFMono-Regular, monospace"
+            font-size="21" font-weight="600" fill="#f0c05e">$42.10</text>
+
+      <rect x="696" y="242" width="182" height="21" rx="10.5" fill="#6ea8d8" fill-opacity="0.12" stroke="#6ea8d8" stroke-opacity="0.45"/>
+      <text x="787" y="256.5" text-anchor="middle" font-family="ui-monospace, 'JetBrains Mono', SFMono-Regular, monospace"
+            font-size="10.5" letter-spacing="0.6" fill="#6ea8d8">SUBSCRIPTION AMORTIZED</text>
+
+      <text x="1104" y="256.5" text-anchor="end" font-family="ui-monospace, 'JetBrains Mono', SFMono-Regular, monospace"
+            font-size="12.5" fill="#a39d92">31 commits · 9 sessions</text>
+    </g>
+
+    <line x1="696" y1="284" x2="1104" y2="284" stroke="#2a2724"/>
+    <text x="696" y="303" font-family="ui-monospace, 'JetBrains Mono', SFMono-Regular, monospace"
+          font-size="11" fill="#736c60">every dollar carries its provenance — never a bare total</text>
+  </g>
+</svg>
