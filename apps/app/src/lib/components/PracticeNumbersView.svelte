@@ -45,7 +45,7 @@
 				QuantifAI — practice numbers
 			</p>
 			<h1 class="font-display mt-2 text-2xl font-semibold text-[var(--color-text)]">
-				The positioning-bracket export
+				Cost and output by project
 			</h1>
 			<a href={resolve('/ledger')} class="mt-3 inline-block text-sm text-[var(--color-usage-blue)] hover:underline">
 				&larr; Back to ledger
@@ -94,7 +94,7 @@
 			<div class="text-4xl" aria-hidden="true">◎</div>
 			<p class="max-w-md text-[var(--color-text-muted)]">
 				No sessions or commits fall inside this window yet. Widen the window or ingest more history
-				— the export button stays available, it will just carry an empty table.
+				— the export button stays disabled until there is at least one row.
 			</p>
 		</section>
 	{:else}

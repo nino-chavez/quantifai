@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "surface": "cost ledger application",
+  "reviewedAt": "2026-07-21T19:57:31.905Z",
+  "reviewedBy": "Codex",
+  "method": "Chrome walkthrough after local D1 migrations; copy and layout inspected at desktop width",
+  "sourceDigest": "sha256:0bbb8cdce739c2e745eba319dca5156dadcd0acc5814b4d2c4e937fc14d147a1",
+  "sourceFiles": 79,
+  "scope": [
+    "public overview",
+    "empty ledger",
+    "practice numbers and methodology table"
+  ]
+}

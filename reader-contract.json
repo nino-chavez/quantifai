@@ -1,0 +1,74 @@
+{
+  "version": 1,
+  "project": "QuantifAI",
+  "defaults": {
+    "reader": "a solo operator tracking the real cost and output of AI-assisted work",
+    "job": "understand what each unit of work cost, what it produced, and how trustworthy each number is",
+    "assumedKnowledge": [
+      "ordinary AI coding tools",
+      "basic project and cost concepts"
+    ],
+    "plainness": "practitioner",
+    "precisionLocks": [
+      "cost amounts and units",
+      "provider names",
+      "provenance labels",
+      "dates and project identifiers"
+    ]
+  },
+  "surfaces": [
+    {
+      "name": "cost ledger application",
+      "renderedRoots": [],
+      "sourceRoots": [
+        "apps/app/src/routes",
+        "apps/app/src/lib"
+      ],
+      "manualReview": {
+        "evidencePath": "docs/reader-audits/cost-ledger-application.json"
+      },
+      "allowTerms": [
+        "AI",
+        "API",
+        "Claude Code",
+        "ChatGPT",
+        "Cursor",
+        "Copilot",
+        "subscription_amortized",
+        "api_metered",
+        "estimated"
+      ],
+      "denyTerms": []
+    },
+    {
+      "name": "initiative portal",
+      "renderedRoots": [
+        "apps/portal/dist"
+      ],
+      "sourceRoots": [
+        "blueprint.yml",
+        "apps/portal/src"
+      ],
+      "reader": "a maintainer reviewing QuantifAI's evidence and decisions",
+      "job": "understand why the product works this way and inspect the evidence behind the current state",
+      "assumedKnowledge": [
+        "software product development",
+        "basic cloud architecture"
+      ],
+      "plainness": "specialist",
+      "precisionLocks": [
+        "decision status",
+        "citations",
+        "cost measurements",
+        "architecture names"
+      ],
+      "allowTerms": [
+        "ADR",
+        "D1",
+        "SvelteKit",
+        "Cloudflare"
+      ],
+      "denyTerms": []
+    }
+  ]
+}

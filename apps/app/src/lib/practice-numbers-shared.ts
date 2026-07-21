@@ -64,16 +64,16 @@ export interface PracticeNumbersData {
 
 export const METHODOLOGY = {
 	commits:
-		'git_events count (authored_at in window) across all configured repos, divided by weeks in the window. A commit is "deterministic" when a local git-notes record (refs/notes/quantifai, written at commit time by the quantifai-post-commit hook) pins its session; otherwise it falls back to the time-window join (a session whose start/end covers the commit\'s timestamp).',
-	merges: 'git_events with 2+ parents (classified from `git log --pretty=%P` at import time), divided by weeks in the window.',
-	sessions: 'sessions with started_at in window, divided by weeks in the window.',
+		'All imported commits in the selected period, divided by weeks. A commit is directly linked when a Git note names its Claude session; otherwise QuantifAI labels it as time-correlated when its timestamp falls inside a session.',
+	merges: 'Imported commits with two or more parents, divided by weeks.',
+	sessions: 'Claude sessions that started during the selected period, divided by weeks.',
 	estimatedCostPerWeek:
-		'sum(sessions.total_cost) for sessions started in window, divided by weeks — list-price token valuation, not a metered bill (see src/lib/pricing/anthropic-pricing.ts).',
+		'Token usage valued at the provider\'s published API prices, divided by weeks. This is an estimate, not money billed.',
 	amortizedCostPerWeek:
-		'sum of covered amortized cost (src/lib/pricing/amortization.ts: plan fee spread by input+output token share, month by month) for interactive sessions in window, divided by weeks.',
+		'The configured monthly subscription fee is allocated across interactive sessions by their share of token use, then divided by weeks.',
 	apiMeteredCostPerWeek:
-		'sum(provider_costs.amount_usd) for dates in window (src/lib/providers/ — daily-aggregate spend pulled from each connected provider\'s cost API), divided by weeks. Real spend, not a token valuation.',
+		'Actual daily charges reported by connected provider billing APIs, divided by weeks.',
 	actualSpendPerWeek:
-		'amortized cost/week (when configured) + API-metered cost/week — both are real spend and compose; never summed with estimated cost/week (list-price token valuation is not spend).',
-	deploysPerWeek: 'not instrumented — no deploy signal exists yet; deliberately not proxied from merge count.'
+		'Subscription cost allocated to sessions plus provider-reported API charges, divided by weeks. Estimated API-equivalent value is not included.',
+	deploysPerWeek: 'Not measured yet. QuantifAI does not treat a merge as a deployment.'
 } as const;
