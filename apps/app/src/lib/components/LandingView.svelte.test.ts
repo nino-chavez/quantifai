@@ -113,6 +113,33 @@ describe('LandingView — fixed copy (DESIGN.md-adjacent spec, no new claims)', 
 		expect(link).toHaveAttribute('href', '/ledger');
 	});
 
+	it('gives the wordmark a home link and adds a same-page jump to the waitlist (D1)', () => {
+		const { getByRole } = render(LandingView, { stats: stats(), turnstileSiteKey: 'test-site-key' });
+		expect(getByRole('link', { name: 'QuantifAI' })).toHaveAttribute('href', '/');
+		const jump = getByRole('link', { name: /join the waitlist/i });
+		expect(jump).toHaveAttribute('href', '#waitlist');
+	});
+
+	it('does not render the actual-spend figure in the savings-green token (D3)', () => {
+		const { getByTestId } = render(LandingView, { stats: stats(), turnstileSiteKey: 'test-site-key' });
+		const strip = getByTestId('proof-strip');
+		const actualSpendFigure = within(strip).getByText('$457');
+		expect(actualSpendFigure.className).not.toMatch(/savings-green/);
+	});
+
+	it('states the counts are all-time and defines "unit of work" next to the numbers (D9)', () => {
+		const { getByTestId } = render(LandingView, { stats: stats(), turnstileSiteKey: 'test-site-key' });
+		const strip = getByTestId('proof-strip');
+		expect(strip.textContent).toMatch(/all-time counts/i);
+		expect(strip.textContent).toMatch(/unit of work is an initiative, a project, or a session/i);
+	});
+
+	it('states the n=1 basis directly under the headline numbers (D16)', () => {
+		const { getByTestId } = render(LandingView, { stats: stats(), turnstileSiteKey: 'test-site-key' });
+		const strip = getByTestId('proof-strip');
+		expect(strip.textContent).toMatch(/n=1/);
+	});
+
 	it('handles a null lastUpdated (fresh instance) without throwing', () => {
 		const { getByTestId } = render(LandingView, {
 			stats: stats({
