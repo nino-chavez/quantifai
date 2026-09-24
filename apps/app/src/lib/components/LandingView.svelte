@@ -100,9 +100,16 @@
 	<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
 </svelte:head>
 
-<div class="mx-auto max-w-4xl px-6 py-16">
-	<header class="mb-14">
-		<p class="font-display text-sm uppercase tracking-[0.2em] text-[var(--color-text-muted)]">QuantifAI</p>
+<div class="mx-auto max-w-5xl px-6 py-16">
+	<!-- D1 (cold review): the page had no nav, anchor link, or any path off
+	     the single scroll. This stays a one-page confident preview
+	     (DESIGN.md "Confident preview") — the fix is a wordmark link home
+	     and a same-page jump to the waitlist, not new routes. -->
+	<header class="mb-14 flex items-center justify-between">
+		<a href={resolve('/')} class="font-display text-sm uppercase tracking-[0.2em] text-[var(--color-text-muted)] hover:text-[var(--color-text)]">
+			QuantifAI
+		</a>
+		<a href="#waitlist" class="text-sm text-[var(--color-usage-blue)] hover:underline">Join the waitlist &darr;</a>
 	</header>
 
 	<section class="mb-16">
@@ -129,8 +136,14 @@
 				<span class="provenance-badge provenance-badge--estimated mt-2">estimated</span>
 			</div>
 			<div>
+				<!-- D3 (cold review): DESIGN.md L0 reserves green for
+				     savings/reclaimable, not a real spend figure — and this
+				     badge already gets a deliberately neutral treatment for
+				     the same reason (see the `actual_spend` comment in
+				     layout.css). The headline number should match its own
+				     badge, not borrow the savings color. -->
 				<p class="text-sm text-[var(--color-text-muted)]">Actual spend (real dollars)</p>
-				<p class="metric-number font-display mt-1 text-4xl font-semibold text-[var(--color-savings-green)]">
+				<p class="metric-number font-display mt-1 text-4xl font-semibold text-[var(--color-text)]">
 					{formatUsd(stats.actualSpendUsd)}
 				</p>
 				<span class="provenance-badge provenance-badge--actual_spend mt-2">amortized + api metered</span>
@@ -161,8 +174,22 @@
 				for the provenance breakdown.
 			</p>
 		{/if}
-		<p class="mt-2 text-xs text-[var(--color-text-muted)]">
-			Measured from the operator's own practice, {lastUpdatedLabel(stats.lastUpdated)} — updated continuously.
+		<!-- D16 (cold review): the n=1 basis for every figure above sat only
+		     in a footnote below Sessions/Units, easy to miss. Moved directly
+		     under the numbers and given the same weight as the ratio line
+		     above (text-sm, not text-xs), so it reads with the numbers it
+		     qualifies rather than after them. -->
+		<p class="mt-2 text-sm text-[var(--color-text-muted)]">
+			Measured from the operator's own practice (a sample of one — n=1), {lastUpdatedLabel(stats.lastUpdated)} — updated
+			continuously.
+		</p>
+		<!-- D9 (cold review): Sessions/Units of work carried no time window or
+		     definition in view. Both are all-time counts (no window exists
+		     yet); "unit of work" is already defined in the hero copy above —
+		     restated here, next to the numbers themselves, rather than only
+		     once at the top of the page. -->
+		<p class="mt-1 text-xs text-[var(--color-text-muted)]">
+			All-time counts, not a rolling window. A unit of work is an initiative, a project, or a session.
 		</p>
 	</section>
 
@@ -207,6 +234,7 @@
 
 	<!-- The one primary CTA. -->
 	<section
+		id="waitlist"
 		class="mb-16 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-8 py-8"
 		data-testid="waitlist"
 	>

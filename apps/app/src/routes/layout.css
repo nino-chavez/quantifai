@@ -39,15 +39,21 @@ body {
 }
 
 /* Provenance badges — distinct fill per DESIGN.md L1, not color-only
-   (accessibility: shape/label carries the meaning, color reinforces it). */
+   (accessibility: shape/label carries the meaning, color reinforces it).
+   D7 (cold review): contrast measured compliant (>6:1 for every fill), but
+   at 11px/regular-weight next to 36px+ headline numbers the qualifier reads
+   as the dimmest thing on the page — size/weight was the actual lever, not
+   color (bumping color further would fight the "shape/label, not color"
+   accessibility rule above). */
 .provenance-badge {
 	display: inline-flex;
 	align-items: center;
 	gap: 0.25rem;
 	font-family: var(--font-mono);
-	font-size: 0.6875rem;
+	font-size: 0.75rem;
+	font-weight: 600;
 	letter-spacing: 0.02em;
-	padding: 0.125rem 0.5rem;
+	padding: 0.1875rem 0.625rem;
 	border-radius: 9999px;
 	border-width: 1px;
 	text-transform: uppercase;
