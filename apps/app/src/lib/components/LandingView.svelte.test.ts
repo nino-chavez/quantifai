@@ -9,6 +9,7 @@ function stats(overrides: Partial<PublicStats> = {}): PublicStats {
 		actualSpendUsd: 456.78,
 		sessionCount: 42,
 		unitCount: 7,
+		totalCommitCount: 20,
 		deterministicCommitCount: 15,
 		lastUpdated: '2026-07-03',
 		...overrides
@@ -38,10 +39,29 @@ describe('LandingView — fixed copy (DESIGN.md-adjacent spec, no new claims)', 
 		expect(within(strip).getByText('$457')).toBeInTheDocument();
 		expect(within(strip).getByText('42')).toBeInTheDocument();
 		expect(within(strip).getByText('7')).toBeInTheDocument();
-		expect(within(strip).getByText('15')).toBeInTheDocument();
+		// D6 (cold review): commits render with their deterministic-linked
+		// fraction shown alongside the total, not the "15" isolated number
+		// with no denominator (formatCommitCount, shared with LedgerView).
+		expect(within(strip).getByText('20 commits (15 deterministic)')).toBeInTheDocument();
 		expect(within(strip).getByText('estimated')).toBeInTheDocument();
 		expect(within(strip).getByText(/amortized \+ api metered/)).toBeInTheDocument();
 		expect(within(strip).getByText(/measured from the operator's own practice/i)).toBeInTheDocument();
+	});
+
+	it('renders the estimated-vs-actual ratio derived from the two live figures (D2)', () => {
+		const { getByTestId } = render(LandingView, { stats: stats(), turnstileSiteKey: 'test-site-key' });
+		const strip = getByTestId('proof-strip');
+		// 1234.56 / 456.78 rounds to 3x — a real derived value, not hardcoded.
+		expect(strip.textContent).toMatch(/Estimated value is\s*3×\s*actual spend/);
+	});
+
+	it('omits the ratio line when actual spend is zero (divide-by-zero guard)', () => {
+		const { getByTestId } = render(LandingView, {
+			stats: stats({ actualSpendUsd: 0 }),
+			turnstileSiteKey: 'test-site-key'
+		});
+		const strip = getByTestId('proof-strip');
+		expect(strip.textContent).not.toMatch(/Estimated value is/i);
 	});
 
 	it('renders the three tiles: Collect, Price, Attribute', () => {
@@ -95,7 +115,15 @@ describe('LandingView — fixed copy (DESIGN.md-adjacent spec, no new claims)', 
 
 	it('handles a null lastUpdated (fresh instance) without throwing', () => {
 		const { getByTestId } = render(LandingView, {
-			stats: stats({ estimatedValueUsd: 0, actualSpendUsd: 0, sessionCount: 0, unitCount: 0, deterministicCommitCount: 0, lastUpdated: null }),
+			stats: stats({
+				estimatedValueUsd: 0,
+				actualSpendUsd: 0,
+				sessionCount: 0,
+				unitCount: 0,
+				totalCommitCount: 0,
+				deterministicCommitCount: 0,
+				lastUpdated: null
+			}),
 			turnstileSiteKey: 'test-site-key'
 		});
 		expect(within(getByTestId('proof-strip')).getByText(/no sessions recorded yet/i)).toBeInTheDocument();

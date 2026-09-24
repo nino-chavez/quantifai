@@ -25,7 +25,9 @@ export interface PublicStats {
 	actualSpendUsd: number;
 	sessionCount: number;
 	unitCount: number;
-	/** git_events linked via git notes (ADR-0004) — the deterministic subset, not total commit count. */
+	/** All git_events rows, deterministic + time-window fallback (ledger.ts LedgerTotals.total_commits) — the denominator for deterministicCommitCount. */
+	totalCommitCount: number;
+	/** git_events linked via git notes (ADR-0004) — the deterministic subset of totalCommitCount, not total commit count. */
 	deterministicCommitCount: number;
 	/** ISO timestamp of the most recent activity across sessions/provider-cost syncs/git commits, or null if this instance has no data yet. */
 	lastUpdated: string | null;
@@ -36,6 +38,7 @@ const EMPTY_STATS: PublicStats = {
 	actualSpendUsd: 0,
 	sessionCount: 0,
 	unitCount: 0,
+	totalCommitCount: 0,
 	deterministicCommitCount: 0,
 	lastUpdated: null
 };
@@ -47,8 +50,13 @@ export async function getPublicStats(db: D1Database): Promise<PublicStats> {
 			.first<{ count: number; total: number }>(),
 		db.prepare(`SELECT COUNT(*) AS count FROM units_of_work`).first<{ count: number }>(),
 		db
-			.prepare(`SELECT COUNT(*) AS count FROM git_events WHERE link_method = 'git_notes'`)
-			.first<{ count: number }>(),
+			.prepare(
+				`SELECT
+					COUNT(*) AS total,
+					COALESCE(SUM(CASE WHEN link_method = 'git_notes' THEN 1 ELSE 0 END), 0) AS deterministic
+				 FROM git_events`
+			)
+			.first<{ total: number; deterministic: number }>(),
 		db
 			.prepare(
 				`SELECT MAX(x) AS last_updated FROM (
@@ -71,7 +79,8 @@ export async function getPublicStats(db: D1Database): Promise<PublicStats> {
 		actualSpendUsd: amortizedCost + providerMeteredCost,
 		sessionCount: sessionRow?.count ?? EMPTY_STATS.sessionCount,
 		unitCount: unitRow?.count ?? EMPTY_STATS.unitCount,
-		deterministicCommitCount: commitRow?.count ?? EMPTY_STATS.deterministicCommitCount,
+		totalCommitCount: commitRow?.total ?? EMPTY_STATS.totalCommitCount,
+		deterministicCommitCount: commitRow?.deterministic ?? EMPTY_STATS.deterministicCommitCount,
 		lastUpdated: lastUpdatedRow?.last_updated ?? EMPTY_STATS.lastUpdated
 	};
 }
