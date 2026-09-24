@@ -12,6 +12,7 @@ describe('getPublicStats', () => {
 			actualSpendUsd: 0,
 			sessionCount: 0,
 			unitCount: 0,
+			totalCommitCount: 0,
 			deterministicCommitCount: 0,
 			lastUpdated: null
 		});
@@ -63,6 +64,7 @@ describe('getPublicStats', () => {
 		// the api_metered provider total only.
 		expect(stats.actualSpendUsd).toBeCloseTo(4.25, 6);
 		// Only the git_notes-linked commit counts as deterministic (1 of 2 total).
+		expect(stats.totalCommitCount).toBe(2);
 		expect(stats.deterministicCommitCount).toBe(1);
 		// Latest of ended_at/provider date/authored_at — the provider_costs row's date.
 		expect(stats.lastUpdated).toBe('2026-07-04');

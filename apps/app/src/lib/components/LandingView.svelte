@@ -1,9 +1,18 @@
 <script lang="ts">
-	import { formatUsd } from '$lib/format';
+	import { formatUsd, formatCommitCount } from '$lib/format';
 	import { resolve } from '$app/paths';
 	import type { PublicStats } from '$lib/server/public-stats';
 
 	let { stats, turnstileSiteKey }: { stats: PublicStats; turnstileSiteKey: string } = $props();
+
+	// D2 (cold review): the two headline dollar figures otherwise render at
+	// equal size/weight with no cue to their ratio, so a reader has to
+	// compute the gap themselves. Derived from the same two real numbers
+	// already shown above — never a separate or invented figure — and
+	// guarded against divide-by-zero for a fresh instance.
+	let estimateRatio = $derived(
+		stats.actualSpendUsd > 0 ? stats.estimatedValueUsd / stats.actualSpendUsd : null
+	);
 
 	type FormState = 'idle' | 'submitting' | 'success' | 'error';
 	let formState = $state<FormState>('idle');
@@ -139,13 +148,20 @@
 				</p>
 			</div>
 			<div>
-				<p class="text-sm text-[var(--color-text-muted)]">Deterministic-linked commits</p>
+				<p class="text-sm text-[var(--color-text-muted)]">Commits produced</p>
 				<p class="metric-number font-display mt-1 text-4xl font-semibold text-[var(--color-usage-blue)]">
-					{stats.deterministicCommitCount}
+					{formatCommitCount(stats.totalCommitCount, stats.deterministicCommitCount)}
 				</p>
 			</div>
 		</div>
-		<p class="mt-6 text-xs text-[var(--color-text-muted)]">
+		{#if estimateRatio !== null}
+			<p class="mt-6 text-sm text-[var(--color-text-muted)]">
+				Estimated value is <span class="metric-number text-[var(--color-text)]">{estimateRatio.toFixed(0)}&times;</span>
+				actual spend — see <a href={resolve('/ledger')} class="text-[var(--color-usage-blue)] hover:underline">the ledger</a>
+				for the provenance breakdown.
+			</p>
+		{/if}
+		<p class="mt-2 text-xs text-[var(--color-text-muted)]">
 			Measured from the operator's own practice, {lastUpdatedLabel(stats.lastUpdated)} — updated continuously.
 		</p>
 	</section>
