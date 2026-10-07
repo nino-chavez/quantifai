@@ -26,12 +26,13 @@
  * Usage:
  *   npm run import:codex -- --dry-run            # totals only, no network
  *   npm run import:codex -- --session <id>       # one session, then query it back
+ *   npm run import:codex -- --sessions-file <f>  # sessions listed one id per line (the hourly job)
  *   npm run import:codex                         # everything
  * Env: QUANTIFAI_API_URL, QUANTIFAI_API_KEY (remote write); CODEX_HOME (default ~/.codex).
  */
 
 import { execFileSync } from 'node:child_process';
-import { createReadStream, existsSync, readdirSync, statSync } from 'node:fs';
+import { createReadStream, existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { createInterface } from 'node:readline';
 import { homedir } from 'node:os';
 import { basename, join } from 'node:path';
@@ -50,6 +51,7 @@ const argValue = (flag: string) => {
 };
 const DRY_RUN = args.includes('--dry-run');
 const ONLY_SESSION = argValue('--session');
+const SESSIONS_FILE = argValue('--sessions-file');
 const CODEX_HOME = process.env.CODEX_HOME ?? join(homedir(), '.codex');
 const ROOTS = [join(CODEX_HOME, 'sessions'), join(CODEX_HOME, 'archived_sessions')];
 const MESSAGE_POST_CHUNK = 4000;
@@ -67,21 +69,26 @@ function walk(dir: string): string[] {
 	return out;
 }
 
-/** The session id from a rollout's session_meta line (first lines only). */
-async function sessionIdOf(path: string): Promise<string | null> {
-	const rl = createInterface({ input: createReadStream(path, { encoding: 'utf8' }), crlfDelay: Infinity });
+/** Session id and cwd from a rollout's session_meta line (first lines only). */
+async function rolloutMeta(path: string): Promise<{ id: string | null; cwd: string | null }> {
+	const stream = createReadStream(path, { encoding: 'utf8' });
+	const rl = createInterface({ input: stream, crlfDelay: Infinity });
 	try {
 		for await (const line of rl) {
 			if (!line.includes('"session_meta"')) continue;
 			try {
-				return JSON.parse(line).payload?.id ?? null;
+				const payload = JSON.parse(line).payload;
+				return { id: payload?.id ?? null, cwd: payload?.cwd ?? null };
 			} catch {
-				return null;
+				return { id: null, cwd: null };
 			}
 		}
-		return null;
+		return { id: null, cwd: null };
 	} finally {
+		// Returning early leaves the stream open; closing readline does not close
+		// it. One leaked descriptor per rollout runs into launchd's 256 limit.
 		rl.close();
+		stream.destroy();
 	}
 }
 
@@ -129,10 +136,21 @@ async function main() {
 	// Group files by session id, then parse each session's rollouts oldest
 	// first (filenames start with the rollout's start time) so a resumed file's
 	// running total is read against the previous file's last total.
+	// Metadata comes from EVERY rollout, even when only some sessions are
+	// imported: the deleted-worktree name match below needs the full set of
+	// real project paths, or a partial run files a session under a stale path.
+	const selected: Set<string> | null = SESSIONS_FILE
+		? new Set(readFileSync(SESSIONS_FILE, 'utf8').split('\n').map((l) => l.trim()).filter(Boolean))
+		: ONLY_SESSION
+			? new Set([ONLY_SESSION])
+			: null;
 	const filesBySession = new Map<string, string[]>();
+	const allCwds: string[] = [];
 	for (const file of files) {
-		const sid = (await sessionIdOf(file)) ?? `nometa:${file}`;
-		if (ONLY_SESSION && sid !== ONLY_SESSION) continue;
+		const meta = await rolloutMeta(file);
+		if (meta.cwd) allCwds.push(meta.cwd);
+		const sid = meta.id ?? `nometa:${file}`;
+		if (selected && !selected.has(sid)) continue;
 		if (!filesBySession.has(sid)) filesBySession.set(sid, []);
 		filesBySession.get(sid)!.push(file);
 	}
@@ -174,7 +192,11 @@ async function main() {
 	const resolved = new Map<string, string>();
 	for (const [sessionId, s] of bySession) resolved.set(sessionId, s.cwd && s.cwd.startsWith('/') ? projectRoot(s.cwd) : 'unknown');
 	const realByName = new Map<string, Set<string>>();
-	for (const p of resolved.values()) {
+	const candidatePaths = new Set(resolved.values());
+	for (const cwd of allCwds) {
+		if (cwd.startsWith('/') && !cwd.includes('/.codex/worktrees/')) candidatePaths.add(projectRoot(cwd));
+	}
+	for (const p of candidatePaths) {
 		if (p === 'unknown' || p.includes('/.codex/worktrees/')) continue;
 		const name = p.split('/').filter(Boolean).pop()!;
 		if (!realByName.has(name)) realByName.set(name, new Set());
