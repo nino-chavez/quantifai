@@ -16,6 +16,11 @@
  * header) — this importer only ever sees notes that exist on the machine
  * it's run from.
  *
+ * Walks branches, remote-tracking branches and tags only, never `--all`:
+ * refs/notes/quantifai is itself a chain of "Notes added by 'git notes add'"
+ * commits, and stash and tool-owned refs hold machine-made ones
+ * (src/lib/importers/git-read.ts GIT_HISTORY_REVS).
+ *
  * Two write paths (ADR-0005), same split as import-claude-jsonl.ts:
  *   - Default (remote): ship raw commits (+ any resolved note session id) to
  *     `POST /api/v1/ingest` — QUANTIFAI_API_URL + QUANTIFAI_API_KEY. The
@@ -30,17 +35,16 @@
  *         Defaults to this repo + wip/quantifai-platform if unset.
  */
 
-import { execFileSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { loadDotEnv, sqlLiteral, runD1File, runD1Query, postIngestBatch, randomUUID } from './lib/ingest-client';
 import {
 	parseGitLog,
 	findSessionForCommit,
-	GIT_LOG_FORMAT,
 	type SessionWindow
 } from '../src/lib/importers/git-log';
-import { parseGitNotesLog, GIT_NOTES_LOG_FORMAT, QUANTIFAI_NOTES_REF } from '../src/lib/importers/git-notes';
+import { parseGitNotesLog } from '../src/lib/importers/git-notes';
+import { readGitLog, readGitNotesLog } from '../src/lib/importers/git-read';
 import { GIT_EVENT_UPSERT_ON_CONFLICT } from '../src/lib/importers/git-event-upsert-sql';
 import { normalizeProjectPath } from '../src/lib/attribution/project-path';
 import { chunk } from '../src/lib/importers/chunk';
@@ -65,30 +69,6 @@ function configuredRepos(): string[] {
 		.split(',')
 		.map((s) => s.trim())
 		.filter(Boolean);
-}
-
-function getGitLog(repoPath: string): string {
-	return execFileSync('git', ['log', '--all', `--pretty=format:${GIT_LOG_FORMAT}`], {
-		cwd: repoPath,
-		encoding: 'utf8',
-		maxBuffer: 64 * 1024 * 1024
-	});
-}
-
-/**
- * `git log --notes=refs/notes/quantifai` — the git-notes deterministic
- * linkage signal (src/lib/importers/git-notes.ts does the parsing). Notes
- * are local to this machine; a repo with no notes ref yet (the hook was
- * never installed, or has never fired) just returns no notes — git emits a
- * harmless stderr warning ("notes ref ... is invalid") in that case, not an
- * error, verified empirically 2026-07-03.
- */
-function getGitNotesLog(repoPath: string): string {
-	return execFileSync(
-		'git',
-		['log', '--all', `--pretty=format:${GIT_NOTES_LOG_FORMAT}`, `--notes=${QUANTIFAI_NOTES_REF}`],
-		{ cwd: repoPath, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 }
-	);
 }
 
 interface RawGitEvent {
@@ -130,7 +110,7 @@ async function main() {
 
 		let output: string;
 		try {
-			output = getGitLog(repoPath);
+			output = readGitLog(repoPath);
 		} catch (err) {
 			console.error(`  git log failed for ${repoPath}:`, (err as Error).message);
 			continue;
@@ -140,7 +120,7 @@ async function main() {
 
 		let notes: Map<string, { sessionId: string }> = new Map();
 		try {
-			notes = parseGitNotesLog(getGitNotesLog(repoPath));
+			notes = parseGitNotesLog(readGitNotesLog(repoPath));
 			if (notes.size > 0) console.log(`  ${notes.size} commit(s) with a quantifai git-note (deterministic)`);
 		} catch (err) {
 			// Fail-open, same posture as the hook itself: a notes-read problem
