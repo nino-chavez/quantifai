@@ -23,39 +23,64 @@ export interface TokenUsage {
 	cacheCreationTokens: number;
 }
 
-export interface PricingRow {
-	/** Matched against the lowercased model string via substring test. */
-	match: string;
+export interface PricingRates {
 	inputPer1M: number;
 	outputPer1M: number;
 	cacheReadPer1M: number;
+	/** 5-minute cache-write rate; the JSONL usage block does not split 5m from 1h writes here. */
 	cacheCreationPer1M: number;
 }
 
-// Order matters: first match wins. Opus/haiku are checked before the sonnet
-// fallback so "claude-3-5-sonnet" and "claude-opus-4" both resolve correctly.
+export interface PricingRow extends PricingRates {
+	/** Matched against the lowercased model string via substring test. */
+	match: string;
+	/**
+	 * Prompt-length pricing. A request whose prompt (input + cache read +
+	 * cache creation) exceeds `overPromptTokens` pays `rates` for every token
+	 * category. Only Claude Haiku 5.5 is priced this way today.
+	 */
+	longPrompt?: { overPromptTokens: number; rates: PricingRates };
+}
+
+function row(match: string, input: number, output: number, cacheRead: number, cacheCreation: number): PricingRow {
+	return { match, inputPer1M: input, outputPer1M: output, cacheReadPer1M: cacheRead, cacheCreationPer1M: cacheCreation };
+}
+
+// List prices from platform.claude.com/docs/en/about-claude/pricing, read
+// 2026-10-07. Columns: input, output, cache read, 5m cache write.
+//
+// Order matters: first match wins, so a version must come before any key it
+// contains ("opus-5-5" before "opus-5", "opus-4-5" before "opus-4"). The
+// three bare family rows at the end catch older or unrecognised versions
+// (claude-3-opus, claude-3-5-haiku, claude-3-5-sonnet) at the legacy rates
+// this table carried before versioned rows existed.
 export const ANTHROPIC_PRICING_TABLE: PricingRow[] = [
+	row('fable-5-1', 10, 50, 0.25, 12.5),
+	row('mythos-5-1', 10, 50, 0.25, 12.5),
+	row('fable-5', 10, 50, 1, 12.5),
+	row('mythos-5', 10, 50, 1, 12.5),
+	row('opus-5-5', 4, 20, 0.2, 5),
+	row('opus-5', 5, 25, 0.5, 6.25),
+	row('opus-4-8', 5, 25, 0.5, 6.25),
+	row('opus-4-7', 5, 25, 0.5, 6.25),
+	row('opus-4-6', 5, 25, 0.5, 6.25),
+	row('opus-4-5', 5, 25, 0.5, 6.25),
+	row('opus-4', 15, 75, 1.5, 18.75),
+	// The pricing page's caching section says 0.05x ($0.10) for a Sonnet 5.5
+	// cache read; its model table and the Sonnet 5.5 overview both say $0.20.
+	row('sonnet-5-5', 2, 10, 0.2, 2.5),
+	row('sonnet-5', 2, 10, 0.2, 2.5),
 	{
-		match: 'opus',
-		inputPer1M: 15.0,
-		outputPer1M: 75.0,
-		cacheReadPer1M: 1.5,
-		cacheCreationPer1M: 18.75
+		...row('haiku-5-5', 0.1, 0.5, 0.01, 0.125),
+		longPrompt: {
+			overPromptTokens: 100_000,
+			rates: { inputPer1M: 0.5, outputPer1M: 2.5, cacheReadPer1M: 0.05, cacheCreationPer1M: 0.625 }
+		}
 	},
-	{
-		match: 'haiku',
-		inputPer1M: 0.8,
-		outputPer1M: 4.0,
-		cacheReadPer1M: 0.08,
-		cacheCreationPer1M: 1.0
-	},
-	{
-		match: 'sonnet',
-		inputPer1M: 3.0,
-		outputPer1M: 15.0,
-		cacheReadPer1M: 0.3,
-		cacheCreationPer1M: 3.75
-	}
+	row('haiku-4-5', 1, 5, 0.1, 1.25),
+	row('opus', 15, 75, 1.5, 18.75),
+	row('haiku', 0.8, 4, 0.08, 1),
+	row('sonnet', 3, 15, 0.3, 3.75)
 ];
 
 // Applied when no row matches (unknown/future model string). Sonnet-tier
@@ -73,7 +98,10 @@ export interface CostEstimate {
 export function estimateAnthropicCost(model: string, usage: TokenUsage): CostEstimate {
 	const m = (model ?? '').toLowerCase();
 	const row = ANTHROPIC_PRICING_TABLE.find((r) => m.includes(r.match));
-	const active = row ?? FALLBACK_ROW;
+	const tier = row ?? FALLBACK_ROW;
+	const promptTokens = usage.inputTokens + usage.cacheReadTokens + usage.cacheCreationTokens;
+	const active =
+		tier.longPrompt && promptTokens > tier.longPrompt.overPromptTokens ? tier.longPrompt.rates : tier;
 
 	const costUsd =
 		(usage.inputTokens / 1_000_000) * active.inputPer1M +
@@ -84,6 +112,6 @@ export function estimateAnthropicCost(model: string, usage: TokenUsage): CostEst
 	return {
 		costUsd,
 		matched: row !== undefined,
-		matchedTier: active.match
+		matchedTier: tier.match
 	};
 }
