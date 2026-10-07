@@ -102,7 +102,7 @@ function projectRoot(cwd: string): string {
 	if (dotWorktrees !== -1) return cwd.slice(0, dotWorktrees);
 	if (cwd.includes('/.codex/worktrees/')) {
 		if (!commonDirCache.has(cwd)) {
-			let root: string | null = null;
+			let root: string | null;
 			try {
 				const common = execFileSync('git', ['-C', cwd, 'rev-parse', '--path-format=absolute', '--git-common-dir'], {
 					encoding: 'utf8',

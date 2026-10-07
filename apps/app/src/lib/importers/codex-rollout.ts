@@ -42,6 +42,20 @@ interface OpenAIUsage {
 	output_tokens?: number;
 }
 
+/** The payload fields this parser reads, across the rollout line types it handles. */
+interface RolloutPayload {
+	id?: string;
+	cwd?: string;
+	originator?: string;
+	model?: string;
+	type?: string;
+	name?: string;
+	session_id?: string;
+	response_id?: string;
+	usage?: OpenAIUsage;
+	info?: { total_token_usage?: OpenAIUsage; last_token_usage?: OpenAIUsage } | null;
+}
+
 export interface CodexRollout {
 	sessionId: string | null;
 	cwd: string | null;
@@ -109,13 +123,13 @@ export function createCodexRolloutParser(options: CodexRolloutParserOptions = {}
 	let firstTotalPending = true;
 
 	function push(line: string, index: number): void {
-		let rec: { type?: string; timestamp?: string; payload?: Record<string, unknown> };
+		let rec: { type?: string; timestamp?: string; payload?: RolloutPayload };
 		try {
 			rec = JSON.parse(line);
 		} catch {
 			return; // torn trailing line from an interrupted write
 		}
-		const p = (rec.payload ?? {}) as Record<string, any>;
+		const p: RolloutPayload = rec.payload ?? {};
 		const ts = rec.timestamp ?? '';
 
 		if (rec.type === 'session_meta') {
