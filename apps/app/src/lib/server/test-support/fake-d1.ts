@@ -8,7 +8,14 @@
  * testing the mock instead of the query).
  *
  * Implements only the subset of the `D1Database` interface this codebase's
- * server modules call: `prepare(sql).bind(...args).run()/.first()/.all()`.
+ * server modules call: `prepare(sql).bind(...args).run()/.first()/.all()`
+ * and `batch(statements)`. `batch` runs inside one transaction and rolls
+ * back on the first failure, matching D1's documented batch semantics.
+ *
+ * `d1RoundTrips(db)` reports how many calls reached the database: each
+ * standalone run/first/all is one, and a whole `batch()` is one. Tests use
+ * it to pin query cost, since the Worker's per-invocation budget is counted
+ * in calls, not rows.
  */
 
 import { DatabaseSync, type SQLInputValue } from 'node:sqlite';
@@ -32,6 +39,19 @@ function migrationFiles(): string[] {
 	];
 }
 
+export interface D1RoundTrips {
+	queries: number;
+	batches: number;
+}
+
+const roundTrips = new WeakMap<object, D1RoundTrips>();
+
+export function d1RoundTrips(db: D1Database): D1RoundTrips {
+	const counts = roundTrips.get(db);
+	if (!counts) throw new Error('d1RoundTrips: not a fake D1 from createFakeD1()');
+	return { ...counts };
+}
+
 export function createFakeD1(): D1Database {
 	const sqlite = new DatabaseSync(':memory:');
 	for (const file of migrationFiles()) {
@@ -39,7 +59,29 @@ export function createFakeD1(): D1Database {
 		sqlite.exec(sql);
 	}
 
+	const counts: D1RoundTrips = { queries: 0, batches: 0 };
+	let inBatch = false;
+	const count = () => {
+		if (!inBatch) counts.queries += 1;
+	};
+
 	const fake = {
+		async batch(statements: Array<{ all(): Promise<{ results: unknown[] }> }>) {
+			counts.batches += 1;
+			inBatch = true;
+			sqlite.exec('BEGIN');
+			try {
+				const out = [];
+				for (const stmt of statements) out.push(await stmt.all());
+				sqlite.exec('COMMIT');
+				return out;
+			} catch (err) {
+				sqlite.exec('ROLLBACK');
+				throw err;
+			} finally {
+				inBatch = false;
+			}
+		},
 		prepare(sql: string) {
 			const stmt = sqlite.prepare(sql);
 			let boundArgs: SQLInputValue[] = [];
@@ -49,6 +91,7 @@ export function createFakeD1(): D1Database {
 					return this;
 				},
 				async run() {
+					count();
 					// node:sqlite's run() returns { changes, lastInsertRowid } — surfaced
 					// as D1's meta.changes so callers can detect an `ON CONFLICT DO
 					// NOTHING` no-op (changes === 0) the same way real D1 reports it
@@ -60,14 +103,17 @@ export function createFakeD1(): D1Database {
 					} as unknown;
 				},
 				async first<T>() {
+					count();
 					return (stmt.get(...boundArgs) as T | undefined) ?? null;
 				},
 				async all<T>() {
+					count();
 					return { results: stmt.all(...boundArgs) as T[] };
 				}
 			};
 		}
 	};
 
+	roundTrips.set(fake, counts);
 	return fake as unknown as D1Database;
 }

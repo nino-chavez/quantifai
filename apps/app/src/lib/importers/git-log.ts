@@ -7,6 +7,8 @@
  * active around its author-timestamp) lives alongside it below.
  */
 
+import { checkoutIdentity } from '../attribution/project-path';
+
 export interface GitCommit {
 	sha: string;
 	authoredAt: string; // ISO 8601
@@ -88,4 +90,31 @@ export function findSessionForCommit(
 	}
 
 	return best;
+}
+
+/**
+ * `findSessionForCommit` across every stored spelling of one repo, trying
+ * the commit's own checkout first. `windows` are all sessions sharing the
+ * commit's repo key (git-events.ts sessionWindowsForRepo), which can include
+ * an unrelated repo with the same folder name. Sessions under the commit's
+ * own checkout (either Mac, any worktree of it) are the certain set, so they
+ * get the first pass; the key-wide set is the fallback that links history
+ * recorded under a repo's older paths or a Codex worktree. Without the first
+ * pass, an overlapping same-name session could beat the right one on window
+ * width alone. `commitProjectPath` null (no path shipped) skips to key-wide.
+ */
+export function findSessionForCommitInRepo(
+	commit: Pick<GitCommit, 'sha' | 'authoredAt' | 'message'>,
+	windows: Array<SessionWindow & { projectPath: string }>,
+	commitProjectPath: string | null
+): SessionWindow | null {
+	if (commitProjectPath) {
+		const own = checkoutIdentity(commitProjectPath);
+		const match = findSessionForCommit(
+			commit,
+			windows.filter((w) => checkoutIdentity(w.projectPath) === own)
+		);
+		if (match) return match;
+	}
+	return findSessionForCommit(commit, windows);
 }
