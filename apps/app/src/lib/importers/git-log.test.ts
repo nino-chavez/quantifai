@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { parseGitLog, findSessionForCommit, GIT_LOG_FORMAT, type SessionWindow } from './git-log';
+import {
+	parseGitLog,
+	findSessionForCommit,
+	findSessionForCommitInRepo,
+	GIT_LOG_FORMAT,
+	type SessionWindow
+} from './git-log';
 
 describe('GIT_LOG_FORMAT / parseGitLog', () => {
 	it('parses a well-formed multi-commit log', () => {
@@ -112,5 +118,44 @@ describe('findSessionForCommit', () => {
 			0
 		);
 		expect(match?.sessionId).toBe('narrow');
+	});
+});
+
+describe('findSessionForCommitInRepo', () => {
+	const commit = { sha: 'c1', authoredAt: '2026-05-01T10:30:00.000Z', message: '' };
+	const w = (sessionId: string, projectPath: string, startedAt: string, endedAt: string) => ({
+		sessionId,
+		projectPath,
+		startedAt,
+		endedAt
+	});
+
+	it('prefers a session in the commit’s own checkout over a tighter one from a same-name repo', () => {
+		const windows = [
+			w('own', '/dev/labs/blog/.worktrees/feat/x', '2026-05-01T09:00:00.000Z', '2026-05-01T12:00:00.000Z'),
+			w('same-name', '/other/blog', '2026-05-01T10:20:00.000Z', '2026-05-01T10:40:00.000Z')
+		];
+		expect(findSessionForCommitInRepo(commit, windows, '/dev/labs/blog')?.sessionId).toBe('own');
+	});
+
+	it('falls back to other spellings of the repo when the own checkout has no covering session', () => {
+		const windows = [
+			w('own-other-day', '/dev/labs/blog', '2026-06-01T09:00:00.000Z', '2026-06-01T12:00:00.000Z'),
+			w('pre-move', '/dev/wip/blog', '2026-05-01T10:00:00.000Z', '2026-05-01T11:00:00.000Z')
+		];
+		expect(findSessionForCommitInRepo(commit, windows, '/dev/labs/blog')?.sessionId).toBe('pre-move');
+	});
+
+	it('counts the other Mac’s sessions in the same checkout as the commit’s own', () => {
+		const windows = [
+			w('other-mac', '/Users/nino.chavez/dev/labs/blog', '2026-05-01T09:00:00.000Z', '2026-05-01T12:00:00.000Z'),
+			w('same-name', '/other/blog', '2026-05-01T10:20:00.000Z', '2026-05-01T10:40:00.000Z')
+		];
+		expect(findSessionForCommitInRepo(commit, windows, '/Users/nino/dev/labs/blog')?.sessionId).toBe('other-mac');
+	});
+
+	it('uses every window when the commit carries no path', () => {
+		const windows = [w('any', '/x/blog', '2026-05-01T10:00:00.000Z', '2026-05-01T11:00:00.000Z')];
+		expect(findSessionForCommitInRepo(commit, windows, null)?.sessionId).toBe('any');
 	});
 });

@@ -8,6 +8,7 @@
  */
 
 import type { D1Database } from '@cloudflare/workers-types';
+import { pickUnitForRepo, repoKey, type UnitCandidate } from '$lib/attribution/project-path';
 
 export type UnitOfWorkKind = 'initiative' | 'project' | 'session';
 export type UnitOfWorkSource = 'git' | 'blueprint' | 'path';
@@ -47,4 +48,20 @@ export async function findUnitIdByProjectPath(
 		.bind(projectPath)
 		.first<{ id: string }>();
 	return row?.id ?? null;
+}
+
+/**
+ * Look up (never create) the unit a git commit from `projectPath` belongs
+ * to, across every path the repo has been stored under. An exact match is
+ * all the old lookup could find, so a re-import from a moved checkout
+ * (`labs/atelier` while the unit was recorded at `wip/atelier`) resolved no
+ * unit — and, before the upsert's never-erase rule, wrote that NULL over the
+ * stored one. See pickUnitForRepo for when it declines to choose.
+ */
+export async function findUnitIdForRepo(db: D1Database, projectPath: string): Promise<string | null> {
+	const { results } = await db
+		.prepare(`SELECT id, project_path FROM units_of_work WHERE instr(project_path, ?1) > 0`)
+		.bind(repoKey(projectPath))
+		.all<UnitCandidate>();
+	return pickUnitForRepo(projectPath, results);
 }

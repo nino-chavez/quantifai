@@ -58,14 +58,17 @@ describe('buildPracticeNumbersMarkdown', () => {
 
 	it('carries a one-line methodology note for every practice-level rate', () => {
 		const md = buildPracticeNumbersMarkdown(BASE);
-		expect(md).toContain('divided by weeks in the window');
-		expect(md).toContain('2+ parents');
+		// Wording follows the plain-language methodology copy in
+		// practice-numbers-shared.ts (rewritten in e651955); assert the facts,
+		// not the old phrasing.
+		expect(md).toContain('divided by weeks');
+		expect(md).toContain('two or more parents');
 	});
 
 	it('names both linkage mechanisms in the commits methodology note', () => {
 		const md = buildPracticeNumbersMarkdown(BASE);
-		expect(md).toContain('git-notes');
-		expect(md).toContain('time-window join');
+		expect(md).toContain('Git note'); // deterministic link
+		expect(md).toContain('time-correlated'); // timestamp-window fallback
 	});
 
 	it('renders a bare commit count with no deterministic suffix when nothing is git-notes-linked', () => {

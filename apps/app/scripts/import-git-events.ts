@@ -40,16 +40,21 @@ import { resolve } from 'node:path';
 import { loadDotEnv, sqlLiteral, runD1File, runD1Query, postIngestBatch, randomUUID } from './lib/ingest-client';
 import {
 	parseGitLog,
-	findSessionForCommit,
+	findSessionForCommitInRepo,
 	type SessionWindow
 } from '../src/lib/importers/git-log';
 import { parseGitNotesLog } from '../src/lib/importers/git-notes';
 import { readGitLog, readGitNotesLog } from '../src/lib/importers/git-read';
 import { GIT_EVENT_UPSERT_ON_CONFLICT } from '../src/lib/importers/git-event-upsert-sql';
-import { normalizeProjectPath } from '../src/lib/attribution/project-path';
+import { normalizeProjectPath, pickUnitForRepo, repoKey, type UnitCandidate } from '../src/lib/attribution/project-path';
 import { chunk } from '../src/lib/importers/chunk';
 
-const GIT_EVENT_POST_CHUNK = 8000; // stays comfortably under the server's 10k MAX_BATCH_SIZE
+// Events per POST /api/v1/ingest request. Bounded by what one Worker
+// invocation can finish, not by MAX_BATCH_SIZE: an 8,000-event request died
+// with ECONNRESET on 2026-10-06 while 400-event requests completed. The
+// server now batches its upserts, but the cap is sized as if every statement
+// still counted toward D1's 1,000-queries-per-invocation limit.
+const GIT_EVENT_POST_CHUNK = 500;
 
 loadDotEnv();
 
@@ -58,7 +63,7 @@ const LOCAL = args.includes('--local');
 const APP_DIR = resolve(import.meta.dirname, '..'); // apps/app — where wrangler.jsonc lives
 
 const DEFAULT_REPOS = [
-	resolve(import.meta.dirname, '../../..'), // apps/app/scripts -> repo root (worktree root if run from inside one; normalizeProjectPath collapses that back to the real repo path)
+	resolve(import.meta.dirname, '../../..'), // apps/app/scripts -> repo root (worktree root if run from inside one; normalizeProjectPath collapses a .worktrees/ or .claude/worktrees/ path back to the real repo path)
 	'/Users/nino/Workspace/dev/wip/quantifai-platform'
 ];
 
@@ -160,6 +165,12 @@ async function main() {
 // Local D1 write path (`--local`).
 // ============================================================
 
+/**
+ * Counts are the links this run computed. The upsert can keep a stored link
+ * this run could not find (never-erase rule, git-event-upsert-sql.ts), so in
+ * local mode "unlinked" is an upper bound; the remote path reports stored
+ * values from the server.
+ */
 async function writeLocal(events: RawGitEvent[]): Promise<{ linked: number; deterministic: number }> {
 	const d1opts = { cwd: APP_DIR, local: true };
 	let linked = 0;
@@ -177,21 +188,30 @@ async function writeLocal(events: RawGitEvent[]): Promise<{ linked: number; dete
 
 	const statements: string[] = [];
 	for (const [projectPath, repoEvents] of byPath) {
-		const unitRows = runD1Query<{ id: string }>(
-			`SELECT id FROM units_of_work WHERE project_path = ${sqlLiteral(projectPath)} LIMIT 1`,
-			d1opts
+		// Same repo-identity rules as the server path (units-of-work.ts
+		// findUnitIdForRepo, git-events.ts sessionWindowsForRepo): match every
+		// stored spelling of the repo, not this checkout's exact path.
+		const key = repoKey(projectPath);
+		const unitId = pickUnitForRepo(
+			projectPath,
+			runD1Query<UnitCandidate>(
+				`SELECT id, project_path FROM units_of_work WHERE instr(project_path, ${sqlLiteral(key)}) > 0`,
+				d1opts
+			)
 		);
-		const unitId = unitRows[0]?.id ?? null;
 
-		const windows = runD1Query<{ session_id: string; started_at: string; ended_at: string }>(
-			`SELECT session_id, started_at, ended_at FROM sessions WHERE project_path = ${sqlLiteral(projectPath)} AND started_at IS NOT NULL AND ended_at IS NOT NULL`,
+		const windows = runD1Query<{ session_id: string; project_path: string; started_at: string; ended_at: string }>(
+			`SELECT session_id, project_path, started_at, ended_at FROM sessions WHERE instr(project_path, ${sqlLiteral(key)}) > 0 AND started_at IS NOT NULL AND ended_at IS NOT NULL`,
 			d1opts
 		);
-		const sessionWindows: SessionWindow[] = windows.map((r) => ({
-			sessionId: r.session_id,
-			startedAt: r.started_at,
-			endedAt: r.ended_at
-		}));
+		const sessionWindows: Array<SessionWindow & { projectPath: string }> = windows
+			.filter((r) => repoKey(r.project_path) === key)
+			.map((r) => ({
+				sessionId: r.session_id,
+				projectPath: r.project_path,
+				startedAt: r.started_at,
+				endedAt: r.ended_at
+			}));
 
 		for (const event of repoEvents) {
 			// Deterministic (git-notes) linkage always wins over the
@@ -203,9 +223,10 @@ async function writeLocal(events: RawGitEvent[]): Promise<{ linked: number; dete
 				linkMethod = 'git_notes';
 				deterministic += 1;
 			} else {
-				const match = findSessionForCommit(
+				const match = findSessionForCommitInRepo(
 					{ sha: event.commitSha, authoredAt: event.authoredAt, message: event.message ?? '' },
-					sessionWindows
+					sessionWindows,
+					projectPath
 				);
 				sessionId = match?.sessionId ?? null;
 				linkMethod = 'time_window';

@@ -28,17 +28,73 @@ export interface NormalizedProject {
 }
 
 // Multi-session work isolation (the workspace's own worktree-mandatory
-// convention) runs agents inside `<repo>/.claude/worktrees/<agent-id>/`. A
-// cwd under that suffix belongs to the SAME repo/initiative as the main
-// checkout — attributing it to a unit named after the worktree's agent-id
-// would fragment one initiative's cost across N throwaway "projects" (one
-// per dispatched agent). Collapse it back to the repo root before taking the
-// last path segment.
-const WORKTREE_MARKER = '/.claude/worktrees/';
+// convention) runs agents inside a linked worktree of the repo. A cwd there
+// belongs to the SAME repo/initiative as the main checkout — attributing it
+// to a unit named after the worktree's branch or agent-id would fragment one
+// initiative's cost across N throwaway "projects". Collapse it back to the
+// repo root before taking the last path segment. Three spellings exist in
+// stored sessions (measured against production 2026-10-06):
+//   <repo>/.claude/worktrees/<agent-id>[/subdir]   Claude Code agent worktrees
+//   <repo>/.worktrees/<branch>[/subdir]            the workspace convention since 2026-07;
+//                                                  <branch> may itself contain slashes
+//   ~/.codex/worktrees/<id>/<repo>[/subdir]        Codex worktrees, repo name after the id
+const IN_REPO_WORKTREE_MARKERS = ['/.claude/worktrees/', '/.worktrees/'];
+const CODEX_WORKTREE_RE = /^(.*\/\.codex\/worktrees\/[^/]+\/[^/]+)(?:\/.*)?$/;
 
-function collapseWorktreePath(cwd: string): string {
-	const idx = cwd.indexOf(WORKTREE_MARKER);
-	return idx === -1 ? cwd : cwd.slice(0, idx);
+/**
+ * The checkout root a path belongs to. Cuts at the EARLIEST in-repo marker,
+ * so an agent worktree nested inside a workspace worktree
+ * (`<repo>/.worktrees/<branch>/.claude/worktrees/<agent>`) still resolves to
+ * `<repo>`, not to `<branch>`. A Codex worktree is its own root.
+ */
+export function repoRoot(cwd: string): string {
+	const cuts = IN_REPO_WORKTREE_MARKERS.map((marker) => cwd.indexOf(marker)).filter((idx) => idx !== -1);
+	if (cuts.length > 0) return cwd.slice(0, Math.min(...cuts));
+	const codex = CODEX_WORKTREE_RE.exec(cwd);
+	return codex ? codex[1] : cwd;
+}
+
+const HOME_PREFIX_RE = /^\/(?:Users|home)\/[^/]+\//;
+
+/**
+ * One checkout's identity across machines: its root with the home directory
+ * replaced by `~/`. The other Mac stores the same checkout under
+ * `/Users/nino.chavez/...`; without this, a dry run against production
+ * (2026-10-06) read mrr-automation's two copies as two repos and refused to
+ * pick its unit.
+ */
+export function checkoutIdentity(path: string): string {
+	return repoRoot(path).replace(HOME_PREFIX_RE, '~/');
+}
+
+function homeOf(path: string): string {
+	return HOME_PREFIX_RE.exec(path)?.[0] ?? '';
+}
+
+/** True when `path` is inside a linked worktree rather than a main checkout. */
+export function isWorktreePath(path: string): boolean {
+	return repoRoot(path) !== path || CODEX_WORKTREE_RE.test(path);
+}
+
+/**
+ * Repo identity for joining across path spellings: the worktree-collapsed
+ * last path segment. Sessions for one repo are stored under every path it
+ * has ever had — pre-reorg locations (`wip/atelier` vs `labs/atelier`), the
+ * other Mac's home dir (`/Users/nino.chavez/...`), and the worktree forms
+ * above — and an exact `project_path =` match only ever sees one of them.
+ * This is the same value `git_events.repo` already stores, so a commit and
+ * its sessions agree on one key.
+ *
+ * Known limits: a repo rename (photography -> nino-chavez-photography)
+ * changes the key, and two unrelated repos with the same folder name share
+ * one. Callers guard the collision: the session join tries the commit's own
+ * checkout root before other spellings (git-log.ts findSessionForCommitInRepo),
+ * and the unit lookup refuses to choose between two checkouts (pickUnitForRepo).
+ */
+export function repoKey(path: string): string {
+	const collapsed = repoRoot(path);
+	const segments = collapsed.split('/').filter(Boolean);
+	return segments.length > 0 ? segments[segments.length - 1] : collapsed;
 }
 
 export function normalizeProjectPath(
@@ -46,12 +102,44 @@ export function normalizeProjectPath(
 	sampleCwd?: string | null
 ): NormalizedProject {
 	if (sampleCwd && sampleCwd.startsWith('/')) {
-		const collapsed = collapseWorktreePath(sampleCwd);
-		const segments = collapsed.split('/').filter(Boolean);
-		const repoName = segments.length > 0 ? segments[segments.length - 1] : collapsed;
-		return { projectPath: collapsed, repoName, normalized: true };
+		const collapsed = repoRoot(sampleCwd);
+		return { projectPath: collapsed, repoName: repoKey(collapsed), normalized: true };
 	}
 
 	const raw = claudeProjectDirName.replace(/^-/, '');
 	return { projectPath: raw, repoName: raw, normalized: false };
+}
+
+export interface UnitCandidate {
+	id: string;
+	project_path: string;
+}
+
+/**
+ * Which unit a commit from `projectPath` belongs to, given every unit row
+ * whose path might share its repo key. An exact path match wins. Otherwise
+ * the same-key candidates must all be ONE checkout (checkoutIdentity: the
+ * repo's main checkout and its worktrees, on either Mac). A main-checkout
+ * unit beats a worktree unit, a unit on the commit's own machine beats the
+ * other Mac's, and path order breaks what is left. Two or more checkouts — a
+ * repo recorded in two workspace locations, or two unrelated repos with one
+ * folder name — is ambiguous and returns null, which the upsert's
+ * never-erase rule turns into "keep whatever unit the row already has".
+ * Nothing here checks time, so guessing between checkouts could attach a
+ * commit to an unrelated repo's unit. Returns null when no candidate shares
+ * the key — git import never invents a unit for a repo with no sessions.
+ */
+export function pickUnitForRepo(projectPath: string, candidates: UnitCandidate[]): string | null {
+	const exact = candidates.find((c) => c.project_path === projectPath);
+	if (exact) return exact.id;
+	const key = repoKey(projectPath);
+	const sameRepo = candidates.filter((c) => repoKey(c.project_path) === key);
+	if (new Set(sameRepo.map((c) => checkoutIdentity(c.project_path))).size !== 1) return null;
+	const mains = sameRepo.filter((c) => !isWorktreePath(c.project_path));
+	const home = homeOf(projectPath);
+	return [...(mains.length > 0 ? mains : sameRepo)].sort(
+		(a, b) =>
+			Number(homeOf(a.project_path) !== home) - Number(homeOf(b.project_path) !== home) ||
+			a.project_path.localeCompare(b.project_path)
+	)[0].id;
 }

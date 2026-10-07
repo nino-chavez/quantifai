@@ -8,6 +8,7 @@
 
 import type { D1Database } from '@cloudflare/workers-types';
 import { GIT_EVENT_UPSERT_ON_CONFLICT } from '$lib/importers/git-event-upsert-sql';
+import { repoKey } from '$lib/attribution/project-path';
 
 export interface GitEventInput {
 	repo: string;
@@ -21,12 +22,19 @@ export interface GitEventInput {
 	isMerge: boolean;
 }
 
-export async function upsertGitEvent(db: D1Database, input: GitEventInput): Promise<void> {
-	await db
+/** What the row holds after the upsert — the never-regress and never-erase rules can keep the stored link over the one this run computed. */
+export interface StoredGitEventLink {
+	sessionId: string | null;
+	linkMethod: 'time_window' | 'git_notes';
+}
+
+function upsertGitEventStatement(db: D1Database, input: GitEventInput) {
+	return db
 		.prepare(
 			`INSERT INTO git_events (id, repo, commit_sha, authored_at, message, unit_id, session_id, link_method, is_merge)
 			 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
-			 ${GIT_EVENT_UPSERT_ON_CONFLICT}`
+			 ${GIT_EVENT_UPSERT_ON_CONFLICT}
+			 RETURNING session_id AS sessionId, link_method AS linkMethod`
 		)
 		.bind(
 			crypto.randomUUID(),
@@ -38,8 +46,44 @@ export async function upsertGitEvent(db: D1Database, input: GitEventInput): Prom
 			input.sessionId,
 			input.linkMethod,
 			input.isMerge ? 1 : 0
-		)
-		.run();
+		);
+}
+
+export async function upsertGitEvent(db: D1Database, input: GitEventInput): Promise<StoredGitEventLink> {
+	const row = await upsertGitEventStatement(db, input).first<StoredGitEventLink>();
+	if (!row) throw new Error(`upsertGitEvent: no row returned for ${input.repo}@${input.commitSha}`);
+	return row;
+}
+
+/**
+ * Statements per `db.batch()` call. A batch is one round trip and one
+ * transaction, and each call has its own 30 s duration limit (D1 platform
+ * limits), so a few hundred cheap upserts per call stays well inside it.
+ */
+export const GIT_EVENT_BATCH_SIZE = 100;
+
+/**
+ * Many upserts in `db.batch()` round trips instead of one query each.
+ * Returns the stored link per input, in input order. Measured 2026-10-06: an
+ * 8,000-event import issued ~9.6k sequential D1 queries in one Worker
+ * invocation and died with ECONNRESET; 400-event requests completed.
+ */
+export async function upsertGitEvents(
+	db: D1Database,
+	inputs: GitEventInput[],
+	batchSize = GIT_EVENT_BATCH_SIZE
+): Promise<StoredGitEventLink[]> {
+	const stored: StoredGitEventLink[] = [];
+	for (let i = 0; i < inputs.length; i += batchSize) {
+		const slice = inputs.slice(i, i + batchSize);
+		const results = await db.batch<StoredGitEventLink>(slice.map((input) => upsertGitEventStatement(db, input)));
+		results.forEach((result, j) => {
+			const row = result.results?.[0];
+			if (!row) throw new Error(`upsertGitEvents: no row returned for ${slice[j].repo}@${slice[j].commitSha}`);
+			stored.push(row);
+		});
+	}
+	return stored;
 }
 
 /**
@@ -75,18 +119,29 @@ export async function commitStatsByUnit(db: D1Database, sinceIso: string | null)
 	return results;
 }
 
-/** Sessions with known start/end windows for one project — the join input for time-window matching (src/lib/importers/git-log.ts findSessionForCommit). */
-export async function sessionWindowsForProject(
+/**
+ * Sessions with known start/end windows for one repo — the join input for
+ * time-window matching (src/lib/importers/git-log.ts findSessionForCommit).
+ * Matches every stored path spelling of the repo via `repoKey`, not one
+ * exact `project_path`: before 2026-10-06 an exact match meant a commit could
+ * only link to sessions recorded under the same path the importer ran from,
+ * so moved repos, worktree sessions, and the other Mac's sessions never
+ * linked. `instr` narrows the scan to plausible rows (no LIKE, so `_` and `%`
+ * in a repo name are literal); `repoKey` makes the exact decision. Rows keep
+ * `projectPath` so the join can prefer the commit's own checkout
+ * (git-log.ts findSessionForCommitInRepo).
+ */
+export async function sessionWindowsForRepo(
 	db: D1Database,
-	projectPath: string
-): Promise<Array<{ sessionId: string; startedAt: string; endedAt: string }>> {
+	key: string
+): Promise<Array<{ sessionId: string; projectPath: string; startedAt: string; endedAt: string }>> {
 	const { results } = await db
 		.prepare(
-			`SELECT session_id AS sessionId, started_at AS startedAt, ended_at AS endedAt
+			`SELECT session_id AS sessionId, project_path AS projectPath, started_at AS startedAt, ended_at AS endedAt
 			 FROM sessions
-			 WHERE project_path = ?1 AND started_at IS NOT NULL AND ended_at IS NOT NULL`
+			 WHERE instr(project_path, ?1) > 0 AND started_at IS NOT NULL AND ended_at IS NOT NULL`
 		)
-		.bind(projectPath)
-		.all<{ sessionId: string; startedAt: string; endedAt: string }>();
-	return results;
+		.bind(key)
+		.all<{ sessionId: string; projectPath: string; startedAt: string; endedAt: string }>();
+	return results.filter((r) => repoKey(r.projectPath) === key);
 }

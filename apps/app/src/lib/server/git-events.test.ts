@@ -107,6 +107,54 @@ describe('upsertGitEvent — never-regress on link_method', () => {
 	});
 });
 
+// 2026-10-06 incident: re-running the importer from post-reorg repo paths
+// found no session windows (and no unit) for pre-July commits, and the
+// upsert wrote those NULLs over good links — ~432 session links and every
+// unit link on atelier/bc-site-doctor/urvil/mrr. A NULL from a re-run means
+// "this run couldn't tell", never "unlink".
+describe('upsertGitEvent — a re-run never erases a link with NULL', () => {
+	async function row(db: D1Database) {
+		return db
+			.prepare('SELECT session_id, unit_id, link_method FROM git_events WHERE commit_sha = ?1')
+			.bind('abc123')
+			.first<{ session_id: string | null; unit_id: string | null; link_method: string }>();
+	}
+
+	it('keeps an existing time_window session_id when the re-run found no window', async () => {
+		const db = createFakeD1();
+		await upsertGitEvent(db, event({ linkMethod: 'time_window', sessionId: 's-good' }));
+		await upsertGitEvent(db, event({ linkMethod: 'time_window', sessionId: null }));
+
+		expect(await row(db)).toMatchObject({ session_id: 's-good', link_method: 'time_window' });
+	});
+
+	it('keeps an existing unit_id when the re-run could not resolve a unit', async () => {
+		const db = createFakeD1();
+		await seedUnit(db, 'unit-1');
+		await upsertGitEvent(db, event({ unitId: 'unit-1', sessionId: 's-good' }));
+		await upsertGitEvent(db, event({ unitId: null, sessionId: null }));
+
+		expect(await row(db)).toMatchObject({ unit_id: 'unit-1', session_id: 's-good' });
+	});
+
+	it('still fills a NULL link when a later run finds one', async () => {
+		const db = createFakeD1();
+		await seedUnit(db, 'unit-1');
+		await upsertGitEvent(db, event({ unitId: null, sessionId: null }));
+		await upsertGitEvent(db, event({ unitId: 'unit-1', sessionId: 's-found' }));
+
+		expect(await row(db)).toMatchObject({ unit_id: 'unit-1', session_id: 's-found' });
+	});
+
+	it('returns the stored link, not the computed one, so callers count what survived', async () => {
+		const db = createFakeD1();
+		await upsertGitEvent(db, event({ linkMethod: 'time_window', sessionId: 's-good' }));
+		const stored = await upsertGitEvent(db, event({ linkMethod: 'time_window', sessionId: null }));
+
+		expect(stored).toEqual({ sessionId: 's-good', linkMethod: 'time_window' });
+	});
+});
+
 describe('commitStatsByUnit — deterministic_commit_count', () => {
 	it('counts git_notes-linked commits separately from the total, grouped by unit', async () => {
 		const db = createFakeD1();
