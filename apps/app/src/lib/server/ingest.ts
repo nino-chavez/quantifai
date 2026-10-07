@@ -18,7 +18,8 @@ import { findSessionForCommitInRepo } from '$lib/importers/git-log';
 import { upsertUnitOfWork, findUnitIdByProjectPath, findUnitIdForRepo, type UnitOfWorkInput } from './units-of-work';
 import { upsertSession, insertMessages, type SessionAggregateInput, type MessageRow } from './sessions';
 import { upsertGitEvents, sessionWindowsForRepo, type GitEventInput } from './git-events';
-import { repoKey } from '$lib/attribution/project-path';
+import { canonicalRepo, repoKey, NO_REPO_ALIASES } from '$lib/attribution/project-path';
+import { loadRepoAliases } from './repo-aliases';
 
 /** Batch-size cap on the largest array (messages) — mirrors the retired platform's MAX_BATCH_SIZE. */
 export const MAX_BATCH_SIZE = 10_000;
@@ -136,13 +137,17 @@ export async function processIngestBatch(db: D1Database, batch: IngestBatch): Pr
 	// to push that join onto the importer's machine). Both the unit and the
 	// session windows resolve by repo identity (repoKey), not one exact path,
 	// so history recorded under a repo's older paths still links.
+	// Old repo names (migration 0007) resolve to the current name before the
+	// row is keyed, so a client still reporting a pre-rename folder name
+	// updates the canonical row instead of starting a duplicate history.
+	const aliases = batch.gitEvents?.length ? await loadRepoAliases(db) : NO_REPO_ALIASES;
 	const gitUnitCache = new Map<string, string | null>();
 	async function gitUnitId(projectPath: string | null): Promise<string | null> {
 		if (!projectPath) return null;
 		const fromBatch = unitIdByPath.get(projectPath);
 		if (fromBatch) return fromBatch;
 		if (!gitUnitCache.has(projectPath)) {
-			gitUnitCache.set(projectPath, await findUnitIdForRepo(db, projectPath));
+			gitUnitCache.set(projectPath, await findUnitIdForRepo(db, projectPath, aliases));
 		}
 		return gitUnitCache.get(projectPath) ?? null;
 	}
@@ -150,7 +155,7 @@ export async function processIngestBatch(db: D1Database, batch: IngestBatch): Pr
 	async function windowsFor(key: string) {
 		let windows = windowCache.get(key);
 		if (!windows) {
-			windows = await sessionWindowsForRepo(db, key);
+			windows = await sessionWindowsForRepo(db, key, aliases);
 			windowCache.set(key, windows);
 		}
 		return windows;
@@ -164,7 +169,7 @@ export async function processIngestBatch(db: D1Database, batch: IngestBatch): Pr
 			sessionId = event.noteSessionId;
 			linkMethod = 'git_notes';
 		} else {
-			const key = event.unitProjectPath ? repoKey(event.unitProjectPath) : event.repo;
+			const key = canonicalRepo(event.unitProjectPath ? repoKey(event.unitProjectPath) : event.repo, aliases);
 			const match = findSessionForCommitInRepo(
 				{ sha: event.commitSha, authoredAt: event.authoredAt, message: event.message ?? '' },
 				await windowsFor(key),
@@ -174,7 +179,7 @@ export async function processIngestBatch(db: D1Database, batch: IngestBatch): Pr
 			linkMethod = 'time_window';
 		}
 		gitInputs.push({
-			repo: event.repo,
+			repo: canonicalRepo(event.repo, aliases),
 			commitSha: event.commitSha,
 			authoredAt: event.authoredAt,
 			message: event.message,

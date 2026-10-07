@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { normalizeProjectPath, repoKey, isWorktreePath, pickUnitForRepo } from './project-path';
+import {
+	normalizeProjectPath,
+	repoKey,
+	isWorktreePath,
+	pickUnitForRepo,
+	canonicalRepo,
+	repoNames
+} from './project-path';
 
 describe('normalizeProjectPath', () => {
 	it('prefers a real cwd when available, extracting the last path segment as repo name', () => {
@@ -169,5 +176,39 @@ describe('pickUnitForRepo', () => {
 
 	it('returns null when no candidate shares the repo key (instr over-matches are filtered out)', () => {
 		expect(pickUnitForRepo('/dev/apps/photography', [unit('vnext', '/dev/apps/photography-vnext-p1')])).toBeNull();
+	});
+});
+
+describe('repo aliases', () => {
+	const aliases = new Map([
+		['photography', 'nino-chavez-photography'],
+		['website-nc', 'nino-chavez-site']
+	]);
+
+	it('maps an old name to the current one and leaves other names alone', () => {
+		expect(canonicalRepo('photography', aliases)).toBe('nino-chavez-photography');
+		expect(canonicalRepo('nino-chavez-photography', aliases)).toBe('nino-chavez-photography');
+		expect(canonicalRepo('blog', aliases)).toBe('blog');
+	});
+
+	it('lists every name a repo was stored under, current name first', () => {
+		expect(repoNames('nino-chavez-photography', aliases)).toEqual(['nino-chavez-photography', 'photography']);
+		expect(repoNames('blog', aliases)).toEqual(['blog']);
+	});
+
+	it('lets the unit lookup find a unit recorded under the old folder name', () => {
+		const units = [{ id: 'old', project_path: '/dev/apps/photography' }];
+		expect(pickUnitForRepo('/dev/sites/nino/nino-chavez-photography', units)).toBeNull();
+		expect(pickUnitForRepo('/dev/sites/nino/nino-chavez-photography', units, aliases)).toBe('old');
+	});
+
+	it('prefers the current-name unit when units exist under both names, instead of calling it ambiguous', () => {
+		const units = [
+			{ id: 'old', project_path: '/Users/nino/dev/apps/photography' },
+			{ id: 'new', project_path: '/Users/nino/dev/sites/nino/nino-chavez-photography' }
+		];
+		// The other Mac's spelling and a worktree path: neither is an exact match.
+		expect(pickUnitForRepo('/Users/nino.chavez/dev/sites/nino/nino-chavez-photography', units, aliases)).toBe('new');
+		expect(pickUnitForRepo('/Users/nino/dev/sites/nino/nino-chavez-photography/.worktrees/x', units, aliases)).toBe('new');
 	});
 });

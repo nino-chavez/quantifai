@@ -221,7 +221,7 @@ describe('processIngestBatch — git-event query cost', () => {
 		const after = d1RoundTrips(db);
 
 		expect(result.gitEvents).toEqual({ accepted: 1000, linked: 1000, deterministic: 0 });
-		expect(after.queries - before.queries).toBe(2); // one unit lookup + one session-window query
+		expect(after.queries - before.queries).toBe(3); // alias table + one unit lookup + one session-window query
 		expect(after.batches - before.batches).toBe(10); // 1000 upserts / 100 per batch
 	});
 
@@ -232,6 +232,48 @@ describe('processIngestBatch — git-event query cost', () => {
 			gitEvent({ repo: 'no-sessions', commitSha: `sha-${i}`, unitProjectPath: `${DEV}/labs/no-sessions` })
 		);
 		await processIngestBatch(db, { gitEvents: events });
-		expect(d1RoundTrips(db).queries - before.queries).toBe(2);
+		expect(d1RoundTrips(db).queries - before.queries).toBe(3); // alias table + unit lookup (a miss) + windows
+	});
+});
+
+describe('processIngestBatch — repo aliases (migration 0007)', () => {
+	// Seeded by the migration: photography -> nino-chavez-photography.
+	const OLD = `${DEV}/apps/photography`;
+	const NEW = `${DEV}/sites/nino/nino-chavez-photography`;
+
+	it('stores a commit reported under an old repo name on the canonical row', async () => {
+		const db = createFakeD1();
+		await processIngestBatch(db, {
+			gitEvents: [gitEvent({ repo: 'nino-chavez-photography', commitSha: 'c1', unitProjectPath: NEW })]
+		});
+		// A queued commit from the old checkout, still carrying the old name.
+		await processIngestBatch(db, { gitEvents: [gitEvent({ repo: 'photography', commitSha: 'c1', unitProjectPath: OLD })] });
+
+		const { results } = await db
+			.prepare('SELECT repo FROM git_events WHERE commit_sha = ?1')
+			.bind('c1')
+			.all<{ repo: string }>();
+		expect(results).toEqual([{ repo: 'nino-chavez-photography' }]);
+	});
+
+	it('links a commit under the new name to a session recorded under the old folder', async () => {
+		const db = createFakeD1();
+		await processIngestBatch(db, {
+			unitsOfWork: [{ kind: 'project', name: 'photography', source: 'path', projectPath: OLD }],
+			sessions: [session('old-folder', OLD, '2026-05-01T10:00:00.000Z', '2026-05-01T11:00:00.000Z')]
+		});
+		const result = await processIngestBatch(db, {
+			gitEvents: [
+				gitEvent({
+					repo: 'nino-chavez-photography',
+					commitSha: 'c1',
+					authoredAt: '2026-05-01T10:30:00.000Z',
+					unitProjectPath: NEW
+				})
+			]
+		});
+
+		expect(result.gitEvents.linked).toBe(1);
+		expect(await storedLink(db, 'c1')).toEqual({ session_id: 'old-folder', unit_path: OLD });
 	});
 });
