@@ -67,7 +67,7 @@ describe('parseCodexRollout', () => {
 		expect(r.messages).toHaveLength(3);
 		expect(sum(r, 'inputTokens') + sum(r, 'cacheReadTokens')).toBe(250 + 40);
 		expect(sum(r, 'outputTokens')).toBe(25 + 5);
-		expect(r.messages[0].messageId).toMatch(/^codex:sess-1:line\d+$/);
+		expect(r.messages[0].messageId).toMatch(/^codex:sess-1:file:line\d+$/);
 	});
 
 	it('falls back to the running total when records cover less (session began before records existed)', () => {
@@ -88,6 +88,29 @@ describe('parseCodexRollout', () => {
 		expect(r.sessionId).toBe('sess-9');
 		expect(r.editor).toBe('codex-desktop');
 		expect(r.messages[0].toolNames.sort()).toEqual(['apply_patch', 'shell']);
+	});
+
+	it('keeps records for a file that opened with records, even when the running total is larger (carried-over total)', () => {
+		const r = parseCodexRollout([meta(), ctx('gpt-6-sol'), record('t1', 'resp_a', 50, 0, 5), total('t1', 9050, 0, 905)]);
+		expect(r.source).toBe('records');
+		expect(sum(r, 'inputTokens')).toBe(50);
+	});
+
+	it('subtracts the previous rollout\'s last total from a resumed file\'s running total', () => {
+		const first = parseCodexRollout([meta(), ctx('gpt-5.6-terra'), total('t1', 1000, 400, 100)], { fileKey: 'roll-a' });
+		const second = parseCodexRollout([meta(), ctx('gpt-5.6-terra'), total('t2', 1300, 500, 130)], { fileKey: 'roll-b', baselineTotal: first.lastTotal });
+		expect(sum(second, 'inputTokens') + sum(second, 'cacheReadTokens')).toBe(300);
+		expect(sum(second, 'outputTokens')).toBe(30);
+		// file key keeps the two files' line-based ids apart
+		expect(first.messages[0].messageId).not.toBe(second.messages[0].messageId);
+		expect(second.messages[0].messageId).toMatch(/^codex:sess-1:roll-b:line\d+$/);
+	});
+
+	it('treats a resumed file whose total restarted at zero as a reset, not a negative delta', () => {
+		const r = parseCodexRollout([meta(), ctx('gpt-5.6-terra'), total('t1', 200, 0, 20)], {
+			baselineTotal: { input_tokens: 1000, cached_input_tokens: 0, cache_write_input_tokens: 0, output_tokens: 100 }
+		});
+		expect(sum(r, 'inputTokens')).toBe(200);
 	});
 
 	it('attributes usage logged before the first turn_context to the first model named', () => {

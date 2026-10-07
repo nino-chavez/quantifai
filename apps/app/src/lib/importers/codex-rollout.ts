@@ -13,12 +13,18 @@
  *     reset (seen on resumed sessions), so the new total counts from zero.
  *     A repeated total adds nothing.
  *
- * Choice per file: records when they account for at least as much input as
- * the running total, else the running total. Measured over 2,763 local
- * rollouts on 2026-10-06: 1,157 files the two agree exactly; 208 records
- * exceed the total by up to 7.3% (the calls it omits); 7 records fall short,
- * because the session began before Codex wrote records. Older files have only
- * the running total.
+ * Choice per file: records when the file's FIRST usage line is a record (the
+ * file was written by a Codex that records every response, so records cover
+ * all of it), else the running total. The rule depends only on the file's
+ * opening lines, so a file can never switch source between runs as it grows —
+ * switching would write a second set of message ids. Measured over 2,763
+ * local rollouts on 2026-10-06, it matches "use whichever covers more" in
+ * 2,739 files; the 3 it changes are resumed sessions where the running total
+ * carried over (below), so records were right.
+ *
+ * Resumed sessions: a rollout that continues an earlier one starts its running
+ * total where the earlier file ended, not at zero. Pass that file's last total
+ * as `baselineTotal` so the carried-over usage is not counted twice.
  *
  * Token convention: OpenAI counts cached input INSIDE `input_tokens` and
  * reasoning INSIDE `output_tokens`. The schema's columns follow Anthropic's
@@ -46,6 +52,17 @@ export interface CodexRollout {
 	recordsInputTokens: number;
 	runningTotalInputTokens: number;
 	unpricedTokens: number;
+	/** The file's last running total — the next rollout of the same session starts from it. */
+	lastTotal: OpenAIUsageTotals | null;
+}
+
+export type OpenAIUsageTotals = Required<OpenAIUsage>;
+
+export interface CodexRolloutParserOptions {
+	/** Identifies the rollout file in synthetic message ids, e.g. its filename stem. */
+	fileKey?: string;
+	/** Last running total of the previous rollout of this session, if any. */
+	baselineTotal?: OpenAIUsageTotals | null;
 }
 
 /** "Codex Desktop" -> "codex-desktop", "codex_exec" -> "codex-exec". */
@@ -77,7 +94,8 @@ export interface CodexRolloutParser {
 }
 
 /** Streaming form — rollouts can exceed the 512 MB a single JS string can hold. */
-export function createCodexRolloutParser(): CodexRolloutParser {
+export function createCodexRolloutParser(options: CodexRolloutParserOptions = {}): CodexRolloutParser {
+	const fileKey = options.fileKey ?? 'file';
 	let sessionId: string | null = null;
 	let cwd: string | null = null;
 	let editor: string | null = null;
@@ -86,7 +104,8 @@ export function createCodexRolloutParser(): CodexRolloutParser {
 	const toolNames = new Set<string>();
 	const records: Pending[] = [];
 	const deltas: Pending[] = [];
-	let prevTotal: Required<OpenAIUsage> | null = null;
+	let prevTotal: Required<OpenAIUsage> | null = options.baselineTotal ?? null;
+	let firstUsage: 'record' | 'total' | null = null;
 
 	function push(line: string, index: number): void {
 		let rec: { type?: string; timestamp?: string; payload?: Record<string, unknown> };
@@ -112,9 +131,11 @@ export function createCodexRolloutParser(): CodexRolloutParser {
 			if (p.name) toolNames.add(p.name);
 		} else if (rec.type === 'token_usage_record' && p.usage) {
 			sessionId ??= p.session_id ?? null;
+			firstUsage ??= 'record';
 			records.push({ key: p.response_id ?? `line${index}`, timestamp: ts, model, usage: full(p.usage) });
 		} else if (rec.type === 'event_msg' && p.type === 'token_count' && p.info?.total_token_usage) {
 			const total = full(p.info.total_token_usage);
+			firstUsage ??= 'total';
 			const reset = prevTotal === null || total.input_tokens < prevTotal.input_tokens;
 			const d = reset
 				? total
@@ -135,7 +156,7 @@ export function createCodexRolloutParser(): CodexRolloutParser {
 
 	const recordsInputTokens = records.reduce((s, r) => s + r.usage.input_tokens, 0);
 	const runningTotalInputTokens = deltas.reduce((s, r) => s + r.usage.input_tokens, 0);
-	const useRecords = records.length > 0 && recordsInputTokens >= runningTotalInputTokens;
+	const useRecords = firstUsage === 'record';
 	const chosen = useRecords ? records : deltas;
 	const source = chosen.length === 0 ? 'none' : useRecords ? 'records' : 'running_total';
 
@@ -157,8 +178,8 @@ export function createCodexRolloutParser(): CodexRolloutParser {
 		return {
 			sessionId: sid,
 			// response ids are globally unique; running-total rows get a stable
-			// synthetic id (rollouts are append-only, so line positions don't move).
-			messageId: useRecords && c.key.startsWith('resp_') ? c.key : `codex:${sid}:${c.key}`,
+			// synthetic id from file + line (rollouts are append-only).
+			messageId: useRecords && c.key.startsWith('resp_') ? c.key : `codex:${sid}:${fileKey}:${c.key}`,
 			timestamp: c.timestamp,
 			model: c.model,
 			cwd,
@@ -169,14 +190,14 @@ export function createCodexRolloutParser(): CodexRolloutParser {
 		};
 	});
 
-	return { sessionId, cwd, editor, source, messages, recordsInputTokens, runningTotalInputTokens, unpricedTokens };
+	return { sessionId, cwd, editor, source, messages, recordsInputTokens, runningTotalInputTokens, unpricedTokens, lastTotal: prevTotal };
 	}
 
 	return { push, finish };
 }
 
-export function parseCodexRollout(lines: string[]): CodexRollout {
-	const parser = createCodexRolloutParser();
+export function parseCodexRollout(lines: string[], options: CodexRolloutParserOptions = {}): CodexRollout {
+	const parser = createCodexRolloutParser(options);
 	lines.forEach((line, index) => parser.push(line, index));
 	return parser.finish();
 }

@@ -34,9 +34,9 @@ import { execFileSync } from 'node:child_process';
 import { createReadStream, existsSync, readdirSync, statSync } from 'node:fs';
 import { createInterface } from 'node:readline';
 import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import { loadDotEnv, postIngestBatch } from './lib/ingest-client';
-import { createCodexRolloutParser, type CodexRollout } from '../src/lib/importers/codex-rollout';
+import { createCodexRolloutParser, type CodexRollout, type OpenAIUsageTotals } from '../src/lib/importers/codex-rollout';
 import { newAccumulator, accumulate, dominantModel, type UsageMessage } from '../src/lib/importers/usage-record';
 import { normalizeProjectPath } from '../src/lib/attribution/project-path';
 import { chunk } from '../src/lib/importers/chunk';
@@ -67,8 +67,26 @@ function walk(dir: string): string[] {
 	return out;
 }
 
-async function parseFile(path: string): Promise<CodexRollout> {
-	const parser = createCodexRolloutParser();
+/** The session id from a rollout's session_meta line (first lines only). */
+async function sessionIdOf(path: string): Promise<string | null> {
+	const rl = createInterface({ input: createReadStream(path, { encoding: 'utf8' }), crlfDelay: Infinity });
+	try {
+		for await (const line of rl) {
+			if (!line.includes('"session_meta"')) continue;
+			try {
+				return JSON.parse(line).payload?.id ?? null;
+			} catch {
+				return null;
+			}
+		}
+		return null;
+	} finally {
+		rl.close();
+	}
+}
+
+async function parseFile(path: string, baselineTotal: OpenAIUsageTotals | null): Promise<CodexRollout> {
+	const parser = createCodexRolloutParser({ fileKey: basename(path, '.jsonl'), baselineTotal });
 	const rl = createInterface({ input: createReadStream(path, { encoding: 'utf8' }), crlfDelay: Infinity });
 	let index = 0;
 	for await (const line of rl) parser.push(line, index++);
@@ -108,19 +126,38 @@ async function main() {
 	const files = ROOTS.flatMap(walk);
 	console.log(`Found ${files.length} rollout files under ${ROOTS.join(', ')}`);
 
-	// Group across files by session id; dedupe messages by id.
+	// Group files by session id, then parse each session's rollouts oldest
+	// first (filenames start with the rollout's start time) so a resumed file's
+	// running total is read against the previous file's last total.
+	const filesBySession = new Map<string, string[]>();
+	for (const file of files) {
+		const sid = (await sessionIdOf(file)) ?? `nometa:${file}`;
+		if (ONLY_SESSION && sid !== ONLY_SESSION) continue;
+		if (!filesBySession.has(sid)) filesBySession.set(sid, []);
+		filesBySession.get(sid)!.push(file);
+	}
+
 	const bySession = new Map<string, { cwd: string | null; editor: string | null; messages: Map<string, UsageMessage> }>();
 	const sourceCounts: Record<string, number> = {};
 	let unpricedTokens = 0;
-	for (const file of files) {
-		const r = await parseFile(file);
-		sourceCounts[r.source] = (sourceCounts[r.source] ?? 0) + 1;
-		if (!r.sessionId || r.messages.length === 0) continue;
-		if (ONLY_SESSION && r.sessionId !== ONLY_SESSION) continue;
-		unpricedTokens += r.unpricedTokens;
-		let s = bySession.get(r.sessionId);
-		if (!s) bySession.set(r.sessionId, (s = { cwd: r.cwd, editor: r.editor, messages: new Map() }));
-		for (const m of r.messages) s.messages.set(m.messageId, m);
+	let resumedFiles = 0;
+	for (const sessionFiles of filesBySession.values()) {
+		sessionFiles.sort((a, b) => basename(a).localeCompare(basename(b)));
+		let baseline: OpenAIUsageTotals | null = null;
+		for (const file of sessionFiles) {
+			if (baseline) resumedFiles += 1;
+			const r = await parseFile(file, baseline);
+			baseline = r.lastTotal;
+			sourceCounts[r.source] = (sourceCounts[r.source] ?? 0) + 1;
+			if (!r.sessionId || r.messages.length === 0) continue;
+			unpricedTokens += r.unpricedTokens;
+			let s = bySession.get(r.sessionId);
+			if (!s) bySession.set(r.sessionId, (s = { cwd: r.cwd, editor: r.editor, messages: new Map() }));
+			for (const m of r.messages) {
+				if (s.messages.has(m.messageId)) throw new Error(`duplicate message id ${m.messageId} in session ${r.sessionId}`);
+				s.messages.set(m.messageId, m);
+			}
+		}
 	}
 
 	const units = new Map<string, { kind: 'initiative' | 'project'; name: string; source: 'path'; projectPath: string }>();
@@ -209,7 +246,7 @@ async function main() {
 		});
 	}
 
-	console.log(`Per-file usage source:`, JSON.stringify(sourceCounts));
+	console.log(`Per-file usage source:`, JSON.stringify(sourceCounts), `| resumed rollouts read against a prior file: ${resumedFiles}`);
 	console.log(`${sessions.length} sessions, ${messages.length} messages, ${units.size} units; deleted Codex worktrees: ${foldedByName} joined their repo by name, ${unresolvedCodexWorktrees} kept their own path`);
 	for (const [model, pm] of [...perModel].sort((a, b) => b[1].cost - a[1].cost)) {
 		console.log(
