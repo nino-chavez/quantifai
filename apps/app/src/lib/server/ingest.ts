@@ -14,10 +14,11 @@
 
 import type { D1Database } from '@cloudflare/workers-types';
 import { chunk } from '$lib/importers/chunk';
-import { findSessionForCommit } from '$lib/importers/git-log';
-import { upsertUnitOfWork, findUnitIdByProjectPath, type UnitOfWorkInput } from './units-of-work';
+import { findSessionForCommitInRepo } from '$lib/importers/git-log';
+import { upsertUnitOfWork, findUnitIdByProjectPath, findUnitIdForRepo, type UnitOfWorkInput } from './units-of-work';
 import { upsertSession, insertMessages, type SessionAggregateInput, type MessageRow } from './sessions';
-import { upsertGitEvent, sessionWindowsForProject } from './git-events';
+import { upsertGitEvents, sessionWindowsForRepo, type GitEventInput } from './git-events';
+import { repoKey } from '$lib/attribution/project-path';
 
 /** Batch-size cap on the largest array (messages) — mirrors the retired platform's MAX_BATCH_SIZE. */
 export const MAX_BATCH_SIZE = 10_000;
@@ -94,13 +95,23 @@ export async function processIngestBatch(db: D1Database, batch: IngestBatch): Pr
 
 	// 2. Sessions (chunked — each is its own atomic upsert; D1 has no
 	// multi-row upsert-with-merge, so this is N statements, not 1).
+	// Lookups are cached per path, misses included: a batch's sessions and
+	// commits share a handful of paths, and an uncached lookup per row was
+	// half of the ~9.6k queries an 8,000-commit import issued (2026-10-06).
+	const sessionUnitCache = new Map<string, string | null>(unitIdByPath);
+	async function sessionUnitId(projectPath: string | null): Promise<string | null> {
+		if (!projectPath) return null;
+		if (!sessionUnitCache.has(projectPath)) {
+			sessionUnitCache.set(projectPath, await findUnitIdByProjectPath(db, projectPath));
+		}
+		return sessionUnitCache.get(projectPath) ?? null;
+	}
+
 	let sessionsWritten = 0;
 	for (const batchOfSessions of chunk(batch.sessions ?? [], UPSERT_CHUNK_SIZE)) {
 		for (const session of batchOfSessions) {
-			const unitId =
-				(session.unitProjectPath && unitIdByPath.get(session.unitProjectPath)) ??
-				(session.unitProjectPath ? await findUnitIdByProjectPath(db, session.unitProjectPath) : null);
-			await upsertSession(db, { ...session, unitId: unitId ?? null });
+			const unitId = await sessionUnitId(session.unitProjectPath);
+			await upsertSession(db, { ...session, unitId });
 			sessionsWritten += 1;
 		}
 	}
@@ -122,51 +133,66 @@ export async function processIngestBatch(db: D1Database, batch: IngestBatch): Pr
 	// `noteSessionId` (a local git-notes record — deterministic, ADR-0004)
 	// uses that directly and skips the join; everything else falls back to
 	// the server-side time-window join (ADR-0005: no row cap means no reason
-	// to push that join onto the importer's machine).
-	let gitEventsAccepted = 0;
-	let gitEventsLinked = 0;
-	let gitEventsDeterministic = 0;
-	const windowCache = new Map<string, Awaited<ReturnType<typeof sessionWindowsForProject>>>();
-	for (const event of batch.gitEvents ?? []) {
-		const unitId =
-			(event.unitProjectPath && unitIdByPath.get(event.unitProjectPath)) ??
-			(event.unitProjectPath ? await findUnitIdByProjectPath(db, event.unitProjectPath) : null);
+	// to push that join onto the importer's machine). Both the unit and the
+	// session windows resolve by repo identity (repoKey), not one exact path,
+	// so history recorded under a repo's older paths still links.
+	const gitUnitCache = new Map<string, string | null>();
+	async function gitUnitId(projectPath: string | null): Promise<string | null> {
+		if (!projectPath) return null;
+		const fromBatch = unitIdByPath.get(projectPath);
+		if (fromBatch) return fromBatch;
+		if (!gitUnitCache.has(projectPath)) {
+			gitUnitCache.set(projectPath, await findUnitIdForRepo(db, projectPath));
+		}
+		return gitUnitCache.get(projectPath) ?? null;
+	}
+	const windowCache = new Map<string, Awaited<ReturnType<typeof sessionWindowsForRepo>>>();
+	async function windowsFor(key: string) {
+		let windows = windowCache.get(key);
+		if (!windows) {
+			windows = await sessionWindowsForRepo(db, key);
+			windowCache.set(key, windows);
+		}
+		return windows;
+	}
 
+	const gitInputs: GitEventInput[] = [];
+	for (const event of batch.gitEvents ?? []) {
 		let sessionId: string | null;
 		let linkMethod: 'git_notes' | 'time_window';
 		if (event.noteSessionId) {
 			sessionId = event.noteSessionId;
 			linkMethod = 'git_notes';
 		} else {
-			let windows = event.unitProjectPath ? windowCache.get(event.unitProjectPath) : undefined;
-			if (event.unitProjectPath && !windows) {
-				windows = await sessionWindowsForProject(db, event.unitProjectPath);
-				windowCache.set(event.unitProjectPath, windows);
-			}
-			const match = windows
-				? findSessionForCommit(
-						{ sha: event.commitSha, authoredAt: event.authoredAt, message: event.message ?? '' },
-						windows
-					)
-				: null;
+			const key = event.unitProjectPath ? repoKey(event.unitProjectPath) : event.repo;
+			const match = findSessionForCommitInRepo(
+				{ sha: event.commitSha, authoredAt: event.authoredAt, message: event.message ?? '' },
+				await windowsFor(key),
+				event.unitProjectPath
+			);
 			sessionId = match?.sessionId ?? null;
 			linkMethod = 'time_window';
 		}
-
-		await upsertGitEvent(db, {
+		gitInputs.push({
 			repo: event.repo,
 			commitSha: event.commitSha,
 			authoredAt: event.authoredAt,
 			message: event.message,
-			unitId: unitId ?? null,
+			unitId: await gitUnitId(event.unitProjectPath),
 			sessionId,
 			linkMethod,
 			isMerge: event.isMerge
 		});
-		gitEventsAccepted += 1;
-		if (sessionId) gitEventsLinked += 1;
-		if (linkMethod === 'git_notes') gitEventsDeterministic += 1;
 	}
+
+	// Count what the rows hold after the upsert, not what this run computed:
+	// the never-regress and never-erase rules can keep a stored link over a
+	// NULL or a guess, and the import summary is what an operator reads to
+	// decide whether a re-run lost links.
+	const stored = await upsertGitEvents(db, gitInputs);
+	const gitEventsAccepted = stored.length;
+	const gitEventsLinked = stored.filter((r) => r.sessionId).length;
+	const gitEventsDeterministic = stored.filter((r) => r.linkMethod === 'git_notes').length;
 
 	return {
 		unitsOfWork: unitIdByPath.size,

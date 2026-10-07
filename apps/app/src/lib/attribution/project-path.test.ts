@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { normalizeProjectPath } from './project-path';
+import { normalizeProjectPath, repoKey, isWorktreePath, pickUnitForRepo } from './project-path';
 
 describe('normalizeProjectPath', () => {
 	it('prefers a real cwd when available, extracting the last path segment as repo name', () => {
@@ -60,5 +60,114 @@ describe('normalizeProjectPath', () => {
 		const result = normalizeProjectPath('-', '/');
 		expect(result.normalized).toBe(true);
 		expect(result.repoName).toBe('/');
+	});
+});
+
+// Path spellings below are real `sessions.project_path` values from
+// production (2026-10-06), trimmed to the shapes that matter.
+describe('normalizeProjectPath — workspace and Codex worktrees', () => {
+	it('collapses a <repo>/.worktrees/<branch> cwd to the repo root', () => {
+		const result = normalizeProjectPath('-x', '/Users/nino/Workspace/dev/apps/minder/.worktrees/s7-marquee');
+		expect(result.projectPath).toBe('/Users/nino/Workspace/dev/apps/minder');
+		expect(result.repoName).toBe('minder');
+	});
+
+	it('collapses a branch name containing slashes and a subdirectory after it', () => {
+		expect(
+			normalizeProjectPath('-x', '/Users/nino/Workspace/dev/apps/letspepper/.worktrees/feat/gallery-announce').projectPath
+		).toBe('/Users/nino/Workspace/dev/apps/letspepper');
+		expect(
+			normalizeProjectPath('-x', '/Users/nino/Workspace/dev/apps/minder/.worktrees/port-jump-points/ios/Minder').projectPath
+		).toBe('/Users/nino/Workspace/dev/apps/minder');
+	});
+
+	it('keeps a Codex worktree as its own path but names it after the repo, dropping any subdirectory', () => {
+		const result = normalizeProjectPath('-x', '/Users/nino/.codex/worktrees/672f/630-marketing-automation/site');
+		expect(result.projectPath).toBe('/Users/nino/.codex/worktrees/672f/630-marketing-automation');
+		expect(result.repoName).toBe('630-marketing-automation');
+	});
+});
+
+describe('repoKey — nested worktrees', () => {
+	it('cuts at the earliest marker when an agent worktree sits inside a workspace worktree', () => {
+		const nested = '/dev/apps/quantifai/quantifai/.worktrees/fix/git-event-linking/.claude/worktrees/agent-abc';
+		expect(repoKey(nested)).toBe('quantifai');
+		expect(normalizeProjectPath('-x', nested).projectPath).toBe('/dev/apps/quantifai/quantifai');
+	});
+});
+
+describe('repoKey', () => {
+	it('gives every stored spelling of one repo the same key', () => {
+		const spellings = [
+			'/Users/nino/Workspace/dev/wip/atelier', // pre-reorg location
+			'/Users/nino/Workspace/dev/labs/atelier', // current location
+			'/Users/nino.chavez/Workspace/dev/wip/atelier', // the other Mac
+			'/Users/nino/Workspace/dev/labs/atelier/.worktrees/feat/x', // workspace worktree
+			'/Users/nino/Workspace/dev/labs/atelier/.claude/worktrees/agent-1', // agent worktree
+			'/Users/nino/.codex/worktrees/002b/atelier' // Codex worktree
+		];
+		expect(new Set(spellings.map(repoKey))).toEqual(new Set(['atelier']));
+	});
+
+	it('does not merge a repo with a different repo whose name merely contains it', () => {
+		expect(repoKey('/Users/nino/Workspace/dev/apps/photography-vnext-p1')).not.toBe(
+			repoKey('/Users/nino/Workspace/dev/apps/photography')
+		);
+	});
+});
+
+describe('isWorktreePath', () => {
+	it('flags all three worktree spellings and not a main checkout', () => {
+		expect(isWorktreePath('/r/blog/.worktrees/caption-edits-0803')).toBe(true);
+		expect(isWorktreePath('/r/blog/.claude/worktrees/agent-1')).toBe(true);
+		expect(isWorktreePath('/Users/nino/.codex/worktrees/672f/blog')).toBe(true);
+		expect(isWorktreePath('/r/blog')).toBe(false);
+	});
+});
+
+describe('pickUnitForRepo', () => {
+	const unit = (id: string, project_path: string) => ({ id, project_path });
+
+	it('prefers an exact path match', () => {
+		expect(
+			pickUnitForRepo('/dev/sites/nino/blog', [unit('old', '/dev/apps/blog'), unit('exact', '/dev/sites/nino/blog')])
+		).toBe('exact');
+	});
+
+	it('finds the unit recorded under the repo’s pre-move path', () => {
+		expect(pickUnitForRepo('/dev/labs/atelier', [unit('u-atelier', '/dev/wip/atelier')])).toBe('u-atelier');
+	});
+
+	it('prefers the main checkout over its own worktree units', () => {
+		const candidates = [
+			unit('wt', '/dev/sites/nino/nino-chavez-site/.worktrees/codex/ship-a'),
+			unit('main', '/dev/sites/nino/nino-chavez-site')
+		];
+		expect(pickUnitForRepo('/dev/work/nino-chavez-site', candidates)).toBe('main');
+	});
+
+	it('uses a worktree unit when the repo has only worktree units under one root', () => {
+		expect(
+			pickUnitForRepo('/dev/sites/nino/nino-chavez-site', [unit('wt', '/dev/x/nino-chavez-site/.worktrees/fix-a')])
+		).toBe('wt');
+	});
+
+	it('treats the other Mac’s copy of a checkout as the same checkout and prefers this machine’s unit', () => {
+		const bothMacs = [
+			unit('other-mac', '/Users/nino.chavez/Workspace/dev/wip/mrr-automation'),
+			unit('this-mac', '/Users/nino/Workspace/dev/wip/mrr-automation')
+		];
+		// The repo moved to work/ after both units were recorded under wip/.
+		expect(pickUnitForRepo('/Users/nino/Workspace/dev/work/mrr-automation', bothMacs)).toBe('this-mac');
+		expect(pickUnitForRepo('/Users/nino.chavez/Workspace/dev/work/mrr-automation', bothMacs)).toBe('other-mac');
+	});
+
+	it('refuses to choose between two checkout roots — a moved repo or an unrelated same-name repo', () => {
+		const candidates = [unit('apps', '/dev/apps/blog'), unit('sites', '/dev/sites/nino/blog')];
+		expect(pickUnitForRepo('/dev/work/blog', candidates)).toBeNull();
+	});
+
+	it('returns null when no candidate shares the repo key (instr over-matches are filtered out)', () => {
+		expect(pickUnitForRepo('/dev/apps/photography', [unit('vnext', '/dev/apps/photography-vnext-p1')])).toBeNull();
 	});
 });
