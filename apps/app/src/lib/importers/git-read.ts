@@ -16,8 +16,10 @@ import { GIT_NOTES_LOG_FORMAT, QUANTIFAI_NOTES_REF } from './git-notes';
  * refs/stash, and tool-owned refs such as refs/codex/* snapshots and
  * refs/archive/* cleanup commits. An allow-list, because a deny-list grows
  * every time a tool invents a ref namespace. No `HEAD`: in a repo with no
- * commits yet it makes `git log` exit 128, and it would not reach detached
- * commits in other worktrees anyway.
+ * commits yet it makes `git log` exit 128. The cost is that commits on a
+ * detached HEAD (mid-rebase, or never put on a branch) are skipped until
+ * they land on a branch, remote or tag; detached commits in other worktrees
+ * were out of reach of `HEAD` anyway.
  */
 export const GIT_HISTORY_REVS = ['--branches', '--remotes', '--tags'] as const;
 
