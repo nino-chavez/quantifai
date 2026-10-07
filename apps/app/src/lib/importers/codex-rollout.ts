@@ -106,6 +106,7 @@ export function createCodexRolloutParser(options: CodexRolloutParserOptions = {}
 	const deltas: Pending[] = [];
 	let prevTotal: Required<OpenAIUsage> | null = options.baselineTotal ?? null;
 	let firstUsage: 'record' | 'total' | null = null;
+	let firstTotalPending = true;
 
 	function push(line: string, index: number): void {
 		let rec: { type?: string; timestamp?: string; payload?: Record<string, unknown> };
@@ -136,7 +137,14 @@ export function createCodexRolloutParser(options: CodexRolloutParserOptions = {}
 		} else if (rec.type === 'event_msg' && p.type === 'token_count' && p.info?.total_token_usage) {
 			const total = full(p.info.total_token_usage);
 			firstUsage ??= 'total';
-			const reset = prevTotal === null || total.input_tokens < prevTotal.input_tokens;
+			// A drop is a reset. So is a resumed file's first total that equals its
+			// own turn's usage: the counter restarted at zero, and subtracting the
+			// previous file's total would undercount.
+			const last = p.info.last_token_usage ? full(p.info.last_token_usage) : null;
+			const restartedOnResume =
+				firstTotalPending && options.baselineTotal != null && last !== null && total.input_tokens === last.input_tokens;
+			firstTotalPending = false;
+			const reset = prevTotal === null || total.input_tokens < prevTotal.input_tokens || restartedOnResume;
 			const d = reset
 				? total
 				: {

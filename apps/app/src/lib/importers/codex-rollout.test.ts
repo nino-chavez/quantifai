@@ -4,11 +4,12 @@ import { parseCodexRollout, normalizeOriginator } from './codex-rollout';
 const meta = (id = 'sess-1') =>
 	JSON.stringify({ type: 'session_meta', timestamp: '2026-10-01T00:00:00Z', payload: { id, cwd: '/repo', originator: 'Codex Desktop' } });
 const ctx = (model: string) => JSON.stringify({ type: 'turn_context', timestamp: '2026-10-01T00:00:01Z', payload: { model, cwd: '/repo' } });
-const total = (ts: string, input: number, cached: number, output: number) =>
+const usage = (input: number, cached: number, output: number) => ({ input_tokens: input, cached_input_tokens: cached, cache_write_input_tokens: 0, output_tokens: output });
+const total = (ts: string, input: number, cached: number, output: number, last?: [number, number, number]) =>
 	JSON.stringify({
 		type: 'event_msg',
 		timestamp: ts,
-		payload: { type: 'token_count', info: { total_token_usage: { input_tokens: input, cached_input_tokens: cached, cache_write_input_tokens: 0, output_tokens: output } } }
+		payload: { type: 'token_count', info: { total_token_usage: usage(input, cached, output), ...(last ? { last_token_usage: usage(...last) } : {}) } }
 	});
 const record = (ts: string, id: string, input: number, cached: number, output: number) =>
 	JSON.stringify({
@@ -111,6 +112,12 @@ describe('parseCodexRollout', () => {
 			baselineTotal: { input_tokens: 1000, cached_input_tokens: 0, cache_write_input_tokens: 0, output_tokens: 100 }
 		});
 		expect(sum(r, 'inputTokens')).toBe(200);
+	});
+
+	it('counts a resumed file in full when its counter restarted from zero above the old total', () => {
+		const baselineTotal = { input_tokens: 1000, cached_input_tokens: 0, cache_write_input_tokens: 0, output_tokens: 100 };
+		const r = parseCodexRollout([meta(), ctx('gpt-5.6-terra'), total('t1', 1200, 0, 120, [1200, 0, 120])], { baselineTotal });
+		expect(sum(r, 'inputTokens')).toBe(1200);
 	});
 
 	it('attributes usage logged before the first turn_context to the first model named', () => {

@@ -154,7 +154,11 @@ async function main() {
 			let s = bySession.get(r.sessionId);
 			if (!s) bySession.set(r.sessionId, (s = { cwd: r.cwd, editor: r.editor, messages: new Map() }));
 			for (const m of r.messages) {
-				if (s.messages.has(m.messageId)) throw new Error(`duplicate message id ${m.messageId} in session ${r.sessionId}`);
+				// A repeated response id is the same response logged twice (safe to
+				// dedupe). A repeated synthetic id means two rows collided: stop.
+				if (s.messages.has(m.messageId) && m.messageId.startsWith('codex:')) {
+					throw new Error(`synthetic message id collision ${m.messageId} in session ${r.sessionId}`);
+				}
 				s.messages.set(m.messageId, m);
 			}
 		}
