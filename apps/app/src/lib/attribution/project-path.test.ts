@@ -201,4 +201,14 @@ describe('repo aliases', () => {
 		expect(pickUnitForRepo('/dev/sites/nino/nino-chavez-photography', units)).toBeNull();
 		expect(pickUnitForRepo('/dev/sites/nino/nino-chavez-photography', units, aliases)).toBe('old');
 	});
+
+	it('prefers the current-name unit when units exist under both names, instead of calling it ambiguous', () => {
+		const units = [
+			{ id: 'old', project_path: '/Users/nino/dev/apps/photography' },
+			{ id: 'new', project_path: '/Users/nino/dev/sites/nino/nino-chavez-photography' }
+		];
+		// The other Mac's spelling and a worktree path: neither is an exact match.
+		expect(pickUnitForRepo('/Users/nino.chavez/dev/sites/nino/nino-chavez-photography', units, aliases)).toBe('new');
+		expect(pickUnitForRepo('/Users/nino/dev/sites/nino/nino-chavez-photography/.worktrees/x', units, aliases)).toBe('new');
+	});
 });

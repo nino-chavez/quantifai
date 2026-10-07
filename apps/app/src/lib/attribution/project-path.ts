@@ -128,8 +128,8 @@ export interface UnitCandidate {
  * Nothing here checks time, so guessing between checkouts could attach a
  * commit to an unrelated repo's unit. Returns null when no candidate shares
  * the key — git import never invents a unit for a repo with no sessions.
- * Keys compare after `aliases`, so a unit recorded under a repo's old folder
- * name counts as the same repo.
+ * A unit recorded under a repo's old folder name (`aliases`) counts as the
+ * same repo, but only when no unit exists under the current name.
  */
 export function pickUnitForRepo(
 	projectPath: string,
@@ -139,7 +139,14 @@ export function pickUnitForRepo(
 	const exact = candidates.find((c) => c.project_path === projectPath);
 	if (exact) return exact.id;
 	const key = canonicalRepo(repoKey(projectPath), aliases);
-	const sameRepo = candidates.filter((c) => canonicalRepo(repoKey(c.project_path), aliases) === key);
+	// Units under the current name first; units under an old name only when
+	// none exist. After a rename a repo usually has units under both folders,
+	// which are two checkouts, so pooling them would always read as ambiguous.
+	const current = candidates.filter((c) => repoKey(c.project_path) === key);
+	const sameRepo =
+		current.length > 0
+			? current
+			: candidates.filter((c) => canonicalRepo(repoKey(c.project_path), aliases) === key);
 	if (new Set(sameRepo.map((c) => checkoutIdentity(c.project_path))).size !== 1) return null;
 	const mains = sameRepo.filter((c) => !isWorktreePath(c.project_path));
 	const home = homeOf(projectPath);
