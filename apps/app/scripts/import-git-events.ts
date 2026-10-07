@@ -42,7 +42,14 @@ import {
 } from '../src/lib/importers/git-log';
 import { parseGitNotesLog, GIT_NOTES_LOG_FORMAT, QUANTIFAI_NOTES_REF } from '../src/lib/importers/git-notes';
 import { GIT_EVENT_UPSERT_ON_CONFLICT } from '../src/lib/importers/git-event-upsert-sql';
-import { normalizeProjectPath, pickUnitForRepo, repoKey, type UnitCandidate } from '../src/lib/attribution/project-path';
+import {
+	canonicalRepo,
+	normalizeProjectPath,
+	pickUnitForRepo,
+	repoKey,
+	repoNames,
+	type UnitCandidate
+} from '../src/lib/attribution/project-path';
 import { chunk } from '../src/lib/importers/chunk';
 
 // Events per POST /api/v1/ingest request. Bounded by what one Worker
@@ -206,26 +213,36 @@ async function writeLocal(events: RawGitEvent[]): Promise<{ linked: number; dete
 		byPath.set(e.unitProjectPath, list);
 	}
 
+	// Old repo names (migration 0007) resolve to the current name, same as the
+	// server path in src/lib/server/ingest.ts.
+	const aliases = new Map(
+		runD1Query<{ alias: string; canonical: string }>('SELECT alias, canonical FROM repo_aliases', d1opts).map((r) => [
+			r.alias,
+			r.canonical
+		])
+	);
+	const instrAny = (names: string[]) =>
+		names.map((n) => `instr(project_path, ${sqlLiteral(n)}) > 0`).join(' OR ');
+
 	const statements: string[] = [];
 	for (const [projectPath, repoEvents] of byPath) {
 		// Same repo-identity rules as the server path (units-of-work.ts
 		// findUnitIdForRepo, git-events.ts sessionWindowsForRepo): match every
 		// stored spelling of the repo, not this checkout's exact path.
-		const key = repoKey(projectPath);
+		const key = canonicalRepo(repoKey(projectPath), aliases);
+		const names = repoNames(key, aliases);
 		const unitId = pickUnitForRepo(
 			projectPath,
-			runD1Query<UnitCandidate>(
-				`SELECT id, project_path FROM units_of_work WHERE instr(project_path, ${sqlLiteral(key)}) > 0`,
-				d1opts
-			)
+			runD1Query<UnitCandidate>(`SELECT id, project_path FROM units_of_work WHERE ${instrAny(names)}`, d1opts),
+			aliases
 		);
 
 		const windows = runD1Query<{ session_id: string; project_path: string; started_at: string; ended_at: string }>(
-			`SELECT session_id, project_path, started_at, ended_at FROM sessions WHERE instr(project_path, ${sqlLiteral(key)}) > 0 AND started_at IS NOT NULL AND ended_at IS NOT NULL`,
+			`SELECT session_id, project_path, started_at, ended_at FROM sessions WHERE (${instrAny(names)}) AND started_at IS NOT NULL AND ended_at IS NOT NULL`,
 			d1opts
 		);
 		const sessionWindows: Array<SessionWindow & { projectPath: string }> = windows
-			.filter((r) => repoKey(r.project_path) === key)
+			.filter((r) => canonicalRepo(repoKey(r.project_path), aliases) === key)
 			.map((r) => ({
 				sessionId: r.session_id,
 				projectPath: r.project_path,
@@ -255,7 +272,7 @@ async function writeLocal(events: RawGitEvent[]): Promise<{ linked: number; dete
 
 			statements.push(
 				`INSERT INTO git_events (id, repo, commit_sha, authored_at, message, unit_id, session_id, link_method, is_merge)
-				 VALUES (${sqlLiteral(randomUUID())}, ${sqlLiteral(event.repo)}, ${sqlLiteral(event.commitSha)}, ${sqlLiteral(event.authoredAt)}, ${sqlLiteral(event.message)}, ${sqlLiteral(unitId)}, ${sqlLiteral(sessionId)}, ${sqlLiteral(linkMethod)}, ${event.isMerge ? 1 : 0})
+				 VALUES (${sqlLiteral(randomUUID())}, ${sqlLiteral(canonicalRepo(event.repo, aliases))}, ${sqlLiteral(event.commitSha)}, ${sqlLiteral(event.authoredAt)}, ${sqlLiteral(event.message)}, ${sqlLiteral(unitId)}, ${sqlLiteral(sessionId)}, ${sqlLiteral(linkMethod)}, ${event.isMerge ? 1 : 0})
 				 ${GIT_EVENT_UPSERT_ON_CONFLICT};`
 			);
 		}

@@ -35,8 +35,21 @@ function migrationFiles(): string[] {
 		'0003_git_events_merge_flag.sql',
 		'0004_provider_costs.sql',
 		'0005_openrouter_activity_cleanup.sql',
-		'0006_waitlist_signups.sql'
+		'0006_waitlist_signups.sql',
+		'0007_repo_aliases.sql'
 	];
+}
+
+const sqliteHandles = new WeakMap<object, DatabaseSync>();
+
+/**
+ * Run one migration file against a fake built with `stopBefore` — for tests
+ * of a data migration, which need rows in place before the migration runs.
+ */
+export function applyMigration(db: D1Database, file: string): void {
+	const sqlite = sqliteHandles.get(db);
+	if (!sqlite) throw new Error('applyMigration: not a fake D1 from createFakeD1()');
+	sqlite.exec(readFileSync(path.join(MIGRATIONS_DIR, file), 'utf8'));
 }
 
 export interface D1RoundTrips {
@@ -52,9 +65,12 @@ export function d1RoundTrips(db: D1Database): D1RoundTrips {
 	return { ...counts };
 }
 
-export function createFakeD1(): D1Database {
+export function createFakeD1(options: { stopBefore?: string } = {}): D1Database {
 	const sqlite = new DatabaseSync(':memory:');
-	for (const file of migrationFiles()) {
+	const files = migrationFiles();
+	const stop = options.stopBefore ? files.indexOf(options.stopBefore) : files.length;
+	if (stop === -1) throw new Error(`createFakeD1: unknown migration ${options.stopBefore}`);
+	for (const file of files.slice(0, stop)) {
 		const sql = readFileSync(path.join(MIGRATIONS_DIR, file), 'utf8');
 		sqlite.exec(sql);
 	}
@@ -115,5 +131,6 @@ export function createFakeD1(): D1Database {
 	};
 
 	roundTrips.set(fake, counts);
+	sqliteHandles.set(fake, sqlite);
 	return fake as unknown as D1Database;
 }

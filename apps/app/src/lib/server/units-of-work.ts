@@ -8,7 +8,15 @@
  */
 
 import type { D1Database } from '@cloudflare/workers-types';
-import { pickUnitForRepo, repoKey, type UnitCandidate } from '$lib/attribution/project-path';
+import {
+	canonicalRepo,
+	pickUnitForRepo,
+	repoKey,
+	repoNames,
+	NO_REPO_ALIASES,
+	type RepoAliases,
+	type UnitCandidate
+} from '$lib/attribution/project-path';
 
 export type UnitOfWorkKind = 'initiative' | 'project' | 'session';
 export type UnitOfWorkSource = 'git' | 'blueprint' | 'path';
@@ -58,10 +66,18 @@ export async function findUnitIdByProjectPath(
  * unit — and, before the upsert's never-erase rule, wrote that NULL over the
  * stored one. See pickUnitForRepo for when it declines to choose.
  */
-export async function findUnitIdForRepo(db: D1Database, projectPath: string): Promise<string | null> {
+export async function findUnitIdForRepo(
+	db: D1Database,
+	projectPath: string,
+	aliases: RepoAliases = NO_REPO_ALIASES
+): Promise<string | null> {
+	const names = repoNames(canonicalRepo(repoKey(projectPath), aliases), aliases);
 	const { results } = await db
-		.prepare(`SELECT id, project_path FROM units_of_work WHERE instr(project_path, ?1) > 0`)
-		.bind(repoKey(projectPath))
+		.prepare(
+			`SELECT id, project_path FROM units_of_work
+			 WHERE ${names.map((_, i) => `instr(project_path, ?${i + 1}) > 0`).join(' OR ')}`
+		)
+		.bind(...names)
 		.all<UnitCandidate>();
-	return pickUnitForRepo(projectPath, results);
+	return pickUnitForRepo(projectPath, results, aliases);
 }

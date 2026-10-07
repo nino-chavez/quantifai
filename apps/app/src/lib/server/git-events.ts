@@ -8,7 +8,13 @@
 
 import type { D1Database } from '@cloudflare/workers-types';
 import { GIT_EVENT_UPSERT_ON_CONFLICT } from '$lib/importers/git-event-upsert-sql';
-import { repoKey } from '$lib/attribution/project-path';
+import {
+	canonicalRepo,
+	repoKey,
+	repoNames,
+	NO_REPO_ALIASES,
+	type RepoAliases
+} from '$lib/attribution/project-path';
 
 export interface GitEventInput {
 	repo: string;
@@ -129,19 +135,23 @@ export async function commitStatsByUnit(db: D1Database, sinceIso: string | null)
  * linked. `instr` narrows the scan to plausible rows (no LIKE, so `_` and `%`
  * in a repo name are literal); `repoKey` makes the exact decision. Rows keep
  * `projectPath` so the join can prefer the commit's own checkout
- * (git-log.ts findSessionForCommitInRepo).
+ * (git-log.ts findSessionForCommitInRepo). `key` is a canonical repo name;
+ * sessions recorded under any of its aliases (an old folder name) match too.
  */
 export async function sessionWindowsForRepo(
 	db: D1Database,
-	key: string
+	key: string,
+	aliases: RepoAliases = NO_REPO_ALIASES
 ): Promise<Array<{ sessionId: string; projectPath: string; startedAt: string; endedAt: string }>> {
+	const names = repoNames(key, aliases);
 	const { results } = await db
 		.prepare(
 			`SELECT session_id AS sessionId, project_path AS projectPath, started_at AS startedAt, ended_at AS endedAt
 			 FROM sessions
-			 WHERE instr(project_path, ?1) > 0 AND started_at IS NOT NULL AND ended_at IS NOT NULL`
+			 WHERE (${names.map((_, i) => `instr(project_path, ?${i + 1}) > 0`).join(' OR ')})
+			   AND started_at IS NOT NULL AND ended_at IS NOT NULL`
 		)
-		.bind(key)
+		.bind(...names)
 		.all<{ sessionId: string; projectPath: string; startedAt: string; endedAt: string }>();
-	return results.filter((r) => repoKey(r.projectPath) === key);
+	return results.filter((r) => canonicalRepo(repoKey(r.projectPath), aliases) === key);
 }
