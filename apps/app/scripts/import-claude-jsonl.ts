@@ -262,7 +262,10 @@ async function main() {
 			});
 		}
 
-		messages.push(...projectMessages);
+		// A loop, not push(...projectMessages): spreading passes every row as a
+		// call argument, and a project with more rows than the engine's argument
+		// limit (about 120k in Node) throws RangeError before anything is sent.
+		for (const m of projectMessages) messages.push(m);
 
 		console.log(
 			`  ${repoName} (${kind}): ${sessionAccs.size} sessions, ${projectMessages.length} messages, $${[...sessionAccs.values()].reduce((s, a) => s + a.costUsd, 0).toFixed(2)}`
