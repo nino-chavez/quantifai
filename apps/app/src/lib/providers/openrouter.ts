@@ -35,12 +35,16 @@
  * `2025-01-01` (this project's `FULL_BACKFILL_START_ISO`, see
  * sync-providers.ts) and `workspaceOrKey: 'org-historical'` (distinct from
  * the daily rows' `'org'`, so the UNIQUE (provider, date, workspace_or_key)
- * upsert never collides the two). Recomputed fresh on every sync — as days
- * age out of the 30-day window, the remainder grows to absorb them, so the
- * provider's lifetime total in `provider_costs` stays conserved. Skipped
- * entirely when it would be ≤ 0 (rounding noise or, someday, an activity
- * window covering literally everything) rather than writing a negative or
- * zero row.
+ * upsert never collides the two). Recomputed fresh on every sync. A day that
+ * ages out of the 30-day window keeps its own stored daily row, so the
+ * remainder is lifetime usage minus EVERY stored daily row: the current
+ * window's, plus the stored days the window no longer shows (the orchestrator
+ * passes this provider's stored rows in). That keeps the provider's total in
+ * `provider_costs` equal to its lifetime usage, and keeps aged-out days in
+ * the 90-day view. Before quantifai#11 the remainder subtracted only the
+ * window, so each aged-out day was counted twice. Skipped when it would be
+ * ≤ 0 and none is stored yet; when one is stored, it is overwritten with $0
+ * rather than left stale.
  *
  * `fetchWindow`'s `window` argument is intentionally unused: neither
  * OpenRouter endpoint here supports an arbitrary since/until range (only a
@@ -55,7 +59,7 @@
  */
 
 import { z } from 'zod';
-import type { CostProvider, FetchWindow, ProviderCostRow, ProviderSyncEnv } from './types';
+import type { CostProvider, FetchWindow, ProviderCostRow, ProviderSyncEnv, StoredCostRow } from './types';
 
 export const OPENROUTER_CREDITS_URL = 'https://openrouter.ai/api/v1/credits';
 export const OPENROUTER_ACTIVITY_URL = 'https://openrouter.ai/api/v1/activity';
@@ -117,29 +121,38 @@ export function normalizeOpenRouterActivity(response: OpenRouterActivityResponse
 }
 
 /**
- * The pre-activity-window remainder: lifetime `total_usage` minus whatever
- * the activity rows already account for. Returns `null` (skip, don't write
- * a zero/negative row) when the activity window already covers the full
- * lifetime total (or overshoots it by rounding noise).
+ * The remainder no daily row accounts for: lifetime `total_usage` minus the
+ * activity rows, minus every stored daily row the activity window no longer
+ * covers (days that aged out keep their own rows). Returns `null` (skip,
+ * don't write a zero/negative row) when daily rows already cover the
+ * lifetime total and no remainder is stored; a stored one is overwritten
+ * with $0 so it can't stay stale.
  */
 export function computeHistoricalRemainder(
 	totalUsage: number,
-	activityRows: ProviderCostRow[]
+	activityRows: ProviderCostRow[],
+	stored: StoredCostRow[] = []
 ): ProviderCostRow | null {
 	const activitySum = activityRows.reduce((sum, row) => sum + row.amountUsd, 0);
-	const remainder = totalUsage - activitySum;
-	if (remainder <= 0) return null;
+	const windowDates = new Set(activityRows.map((row) => row.date));
+	const agedOutStoredSum = stored
+		.filter((row) => row.workspaceOrKey === 'org' && !windowDates.has(row.date))
+		.reduce((sum, row) => sum + row.amountUsd, 0);
+	const remainder = totalUsage - activitySum - agedOutStoredSum;
+	const remainderStored = stored.some((row) => row.workspaceOrKey === HISTORICAL_REMAINDER_WORKSPACE);
+	if (remainder <= 0 && !remainderStored) return null;
 
 	return {
 		provider: 'openrouter',
 		date: HISTORICAL_REMAINDER_DATE,
 		workspaceOrKey: HISTORICAL_REMAINDER_WORKSPACE,
-		amountUsd: remainder,
+		amountUsd: Math.max(0, remainder),
 		currency: 'USD',
 		raw: {
-			derivation: 'pre-activity-window remainder, derived from /credits minus /activity sum',
+			derivation: 'remainder: /credits total_usage minus the /activity sum minus stored daily rows outside the window',
 			total_usage: totalUsage,
-			activity_sum: activitySum
+			activity_sum: activitySum,
+			aged_out_stored_sum: agedOutStoredSum
 		}
 	};
 }
@@ -177,14 +190,14 @@ export const openrouterProvider: CostProvider = {
 		return Boolean(env.OPENROUTER_API_KEY);
 	},
 
-	async fetchWindow(_window: FetchWindow, env: ProviderSyncEnv): Promise<ProviderCostRow[]> {
+	async fetchWindow(_window: FetchWindow, env: ProviderSyncEnv, stored: StoredCostRow[] = []): Promise<ProviderCostRow[]> {
 		const apiKey = env.OPENROUTER_API_KEY;
 		if (!apiKey) throw new Error('openrouterProvider.fetchWindow called without OPENROUTER_API_KEY');
 
 		const [activity, credits] = await Promise.all([fetchActivity(apiKey), fetchCredits(apiKey)]);
 
 		const dailyRows = normalizeOpenRouterActivity(activity);
-		const remainderRow = computeHistoricalRemainder(credits.data.total_usage, dailyRows);
+		const remainderRow = computeHistoricalRemainder(credits.data.total_usage, dailyRows, stored);
 
 		return remainderRow ? [...dailyRows, remainderRow] : dailyRows;
 	}

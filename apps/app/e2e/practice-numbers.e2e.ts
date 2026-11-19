@@ -11,7 +11,7 @@ test('@smoke practice-numbers renders the window nav, rates table, and exactly o
 }) => {
 	await page.goto('/practice-numbers');
 
-	await expect(page.getByRole('heading', { name: /positioning-bracket export/i })).toBeVisible();
+	await expect(page.getByRole('heading', { name: /cost and output by project/i })).toBeVisible();
 	await expect(page.getByTestId('window-nav')).toBeVisible();
 	await expect(page.getByTestId('practice-rates')).toBeVisible();
 	await expect(page.getByTestId('as-of')).toBeVisible();

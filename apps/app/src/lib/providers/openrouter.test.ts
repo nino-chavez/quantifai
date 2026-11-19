@@ -90,6 +90,53 @@ describe('computeHistoricalRemainder', () => {
 	it('skips the remainder row for a zero-activity, zero-lifetime account rather than writing a $0 row', () => {
 		expect(computeHistoricalRemainder(0, [])).toBeNull();
 	});
+
+	describe('with the rows already stored (quantifai#11)', () => {
+		const window = normalizeOpenRouterActivity({
+			data: [
+				{ date: '2026-11-01 00:00:00', usage: 1, byok_usage_inference: 0 },
+				{ date: '2026-11-02 00:00:00', usage: 1, byok_usage_inference: 0 }
+			]
+		});
+
+		it('subtracts stored daily rows that have aged out of the window, so no day is counted twice', () => {
+			const stored = [
+				{ date: '2026-10-30', workspaceOrKey: 'org', amountUsd: 1 },
+				{ date: '2026-10-31', workspaceOrKey: 'org', amountUsd: 1 }
+			];
+			// Lifetime $12: $8 before any stored day, two aged-out days, two window days.
+			expect(computeHistoricalRemainder(12, window, stored)?.amountUsd).toBeCloseTo(8, 10);
+		});
+
+		it('does not subtract a stored day the window still covers: this sync replaces it', () => {
+			const stored = [
+				{ date: '2026-11-01', workspaceOrKey: 'org', amountUsd: 0.4 }, // revised to $1 by this window
+				{ date: '2026-10-31', workspaceOrKey: 'org', amountUsd: 1 }
+			];
+			expect(computeHistoricalRemainder(12, window, stored)?.amountUsd).toBeCloseTo(9, 10);
+		});
+
+		it('ignores the stored remainder row itself when summing stored days', () => {
+			const stored = [
+				{ date: HISTORICAL_REMAINDER_DATE, workspaceOrKey: HISTORICAL_REMAINDER_WORKSPACE, amountUsd: 30 },
+				{ date: '2026-10-31', workspaceOrKey: 'org', amountUsd: 1 }
+			];
+			expect(computeHistoricalRemainder(12, window, stored)?.amountUsd).toBeCloseTo(9, 10);
+		});
+
+		it('overwrites a stored remainder with $0 when stored days now cover the lifetime total, rather than leaving it stale', () => {
+			const stored = [
+				{ date: HISTORICAL_REMAINDER_DATE, workspaceOrKey: HISTORICAL_REMAINDER_WORKSPACE, amountUsd: 5 },
+				{ date: '2026-10-31', workspaceOrKey: 'org', amountUsd: 1 }
+			];
+			const remainder = computeHistoricalRemainder(3, window, stored);
+			expect(remainder).toMatchObject({
+				date: HISTORICAL_REMAINDER_DATE,
+				workspaceOrKey: HISTORICAL_REMAINDER_WORKSPACE,
+				amountUsd: 0
+			});
+		});
+	});
 });
 
 describe('openrouterProvider — disabled-provider state (DESIGN.md rule 7)', () => {

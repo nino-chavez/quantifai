@@ -18,7 +18,7 @@
 import type { D1Database } from '@cloudflare/workers-types';
 import { ALL_PROVIDERS } from '$lib/providers/registry';
 import type { CostProvider, ProviderSyncEnv } from '$lib/providers/types';
-import { upsertProviderCosts } from './provider-costs';
+import { storedProviderCosts, upsertProviderCosts } from './provider-costs';
 import { getSyncState, writeSyncState, type SyncStatus } from './provider-sync-state';
 
 /**
@@ -95,7 +95,8 @@ export async function runProviderSync(
 			// re-sync shortly after a prior success. Omitting it lets each
 			// adapter default to "everything since sinceIso, through whatever
 			// the provider currently has," which is what "sync" means here.
-			const rows = await provider.fetchWindow({ sinceIso }, env);
+			const stored = await storedProviderCosts(db, provider.name);
+			const rows = await provider.fetchWindow({ sinceIso }, env, stored);
 			const rowsWritten = await upsertProviderCosts(db, rows);
 			const { daysBackfilled, totalAmountUsd } = summarizeRows(rows);
 

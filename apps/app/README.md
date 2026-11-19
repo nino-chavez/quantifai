@@ -1,7 +1,7 @@
-# quantifai-next — app
+# quantifai — app
 
-Stage 3 prototype slice (ADR-0004 first shippable slice): a unit-of-work
-ledger that prices this very initiative end-to-end on real local data.
+The QuantifAI ledger, live at quantifai.app: the unit-of-work ledger, the
+practice-numbers page, the public landing and the ingest API.
 SvelteKit 2 + Svelte 5 (runes) + TypeScript + Tailwind v4, on Cloudflare
 Workers + D1 (ADR-0005 — pure Cloudflare, superseding the Supabase/Vercel
 line).
@@ -22,21 +22,33 @@ No Docker, no Supabase CLI — `wrangler`'s local D1 is a SQLite file under
 
 ## Ingest real data
 
-Two modes (`scripts/import-claude-jsonl.ts`, `scripts/import-git-events.ts`):
+Day to day, the [`quantifai-sync`](https://github.com/nino-chavez/quantifai-sync)
+agent ships Claude Code usage and commits as they happen. The importers here
+are for backfills and for sources the agent does not read.
+
+Three importers:
+
+- `npm run import:claude` (`scripts/import-claude-jsonl.ts`): Claude Code
+  JSONL session files.
+- `npm run import:git` (`scripts/import-git-events.ts`): git commits.
+- `npm run import:codex` (`scripts/import-codex-rollouts.ts`): Codex
+  rollouts under `~/.codex`, priced from `openai-pricing.ts`. Remote only;
+  `--dry-run` prints totals without sending. Usage is in the script's header.
 
 ```sh
 # Default: POST to the deployed ingest endpoint.
 # Requires QUANTIFAI_API_URL + QUANTIFAI_API_KEY (see .env.example).
 npm run import:claude
 npm run import:git
+npm run import:codex
 
-# --local: write directly to the local D1 file via `wrangler d1 execute`,
-# no deployed endpoint or API key needed.
+# --local (Claude and git importers): write directly to the local D1 file via
+# `wrangler d1 execute`, no deployed endpoint or API key needed.
 npm run import:claude -- --local
 npm run import:git -- --local
 ```
 
-Both are idempotent — re-running recomputes from source and upserts.
+All three are idempotent — re-running recomputes from source and upserts.
 
 ## Deterministic commit attribution (git-notes, ADR-0004)
 
@@ -66,17 +78,19 @@ commit falls back to the time-window join at import time exactly as before.
 Full mechanism + empirical findings: `hooks/quantifai-post-commit`.
 
 **Limitations (v1, deliberate):**
-- **Local-only.** Git notes do NOT travel with `git clone`/`git push` unless
-  pushed explicitly. A fresh clone (or a machine that never ran the hook)
-  has zero notes — all its history reads as `time_window`, honestly, not as
-  an error. To carry notes to another clone/machine:
+- **Read where the commit was made.** Git notes do NOT travel with
+  `git clone`/`git push` unless pushed explicitly. The `quantifai-sync`
+  agent does not need them to: it reads each queued commit's note on the
+  machine that made the commit and sends the note's session id with that
+  commit (`internal/git/sender.go`, `noteSessionID`). A clone or machine
+  that never ran the hook has no notes, so its history reads as
+  `time_window`, honestly, not as an error. To carry notes to another clone
+  for `npm run import:git`:
   ```sh
   git push origin refs/notes/quantifai
   # on the other clone:
   git fetch origin refs/notes/quantifai:refs/notes/quantifai
   ```
-  No shipper/sync daemon exists for this yet — it's a manual escape hatch,
-  not automated.
 - **Never regresses.** Once a commit is linked via a note (`link_method =
   'git_notes'`), a later re-import can only ever upgrade or preserve that
   link, never fall back to a `time_window` guess for the same commit — see
@@ -128,18 +142,34 @@ existed to need a redirect): no route, no DNS records, no Access coverage.
 It briefly existed during the 2026-07-03 consolidation; nothing references
 it.
 
-Canonical **importer/API + POST** hostname is **quantifai-app.biq.workers.dev**
-(`QUANTIFAI_API_URL`): the `quantifai.app` zone carries a security rule
+**Which host takes POSTs.** The `quantifai.app` zone carries a security rule
 (landing-era, unreadable with current API tokens) that serves a Cloudflare
-block page on POSTs — verified live 2026-07-04 to hit even a real browser
-holding a valid Turnstile token, not just non-browser clients. So ALL
-programmatic POSTs (`/api/v1/ingest`, `/api/v1/sync-providers`) AND
-browser-page POSTs (the landing's waitlist form, any future in-app POST)
-go cross-origin to workers.dev, which is off-zone; the waitlist endpoint
-sets CORS headers for the `quantifai.app`/`www` origins for exactly this.
-If that WAF rule is ever removed (dashboard: Security → WAF → custom
-rules), the split can collapse to one hostname — the client keeps a
-same-origin fallback so no code change would be needed.
+block page (403) on most POSTs. `quantifai-app.biq.workers.dev` is
+off-zone and takes every POST. Probed on 2026-11-19 with a made-up key and
+an empty body:
+
+| POST | `quantifai.app` | workers.dev |
+|---|---|---|
+| `/api/v1/ingest` with an `Authorization` header | reaches the Worker (401) | reaches the Worker (401) |
+| `/api/v1/ingest` with no `Authorization` header | block page (403) | reaches the Worker (401) |
+| `/api/v1/sync-providers`, even with a key | block page (403) | reaches the Worker (401) |
+| `/api/v1/waitlist`, as the landing form sends it | block page (403) | reaches the Worker (400) |
+
+So:
+
+- The `quantifai-sync` agent defaults `api_url` to the apex. Its ingest
+  POSTs carry the key, so they pass; this Mac's agent ships there.
+- The importers' `QUANTIFAI_API_URL` (`.env.example`) and manual
+  `/api/v1/sync-providers` calls use workers.dev.
+- The landing's waitlist form posts cross-origin to workers.dev. The
+  waitlist endpoint sets CORS headers for the `quantifai.app`/`www` origins
+  for exactly this.
+
+The rule is not readable, so this table is what was observed, not what the
+rule says. If an apex POST ever answers with an HTML block page, point that
+client at workers.dev. If the rule is removed (dashboard: Security → WAF →
+custom rules), the split can collapse to one hostname. The landing keeps a
+same-origin fallback, so it needs no code change.
 
 Access (Zero Trust org `quantifai-next.cloudflareaccess.com`, OTP IdP for
 the operator email), two applications:
@@ -173,6 +203,7 @@ npx playwright test             # @smoke e2e — builds and runs against `wrangl
   `src/lib/server/` — a Worker queries D1 directly with no PostgREST row
   cap, so no RPC indirection.
 - `scripts/import-claude-jsonl.ts` — the Claude Code JSONL importer.
+- `scripts/import-codex-rollouts.ts` — the Codex rollout importer.
 - `scripts/import-git-events.ts` — the git-log importer: reads local
   `refs/notes/quantifai` notes (deterministic linkage) and falls back to the
   server-side time-window join in remote mode for anything un-noted.
