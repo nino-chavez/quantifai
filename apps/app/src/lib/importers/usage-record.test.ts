@@ -109,13 +109,15 @@ describe('accumulate / dominantModel', () => {
 	});
 });
 
+type TestLine = Record<string, unknown> & { message: Record<string, unknown> };
+
 describe('countOnce — usage counted once per API response', () => {
 	// Claude Code writes one API response as one record per content block. Each
 	// record has its own uuid, the same message.id and requestId, and a usage
 	// block: identical on every record, or (older versions) a partial output
 	// count on the earlier ones.
 	function block(uuid: string, usage: Record<string, unknown>, ids: { id?: string; requestId?: string } = { id: 'msg_1', requestId: 'req_1' }, model = 'claude-opus-5-5') {
-		const line = assistantLine({ uuid, ...(ids.requestId ? { requestId: ids.requestId } : {}) }) as Record<string, any>;
+		const line = assistantLine({ uuid, ...(ids.requestId ? { requestId: ids.requestId } : {}) }) as TestLine;
 		line.message = { ...line.message, model, usage, ...(ids.id ? { id: ids.id } : {}) };
 		return extractUsageMessage(line)!;
 	}
@@ -162,7 +164,7 @@ describe('countOnce — usage counted once per API response', () => {
 	it('keeps tool names on a record whose usage was already counted', () => {
 		const state = newSessionDedup();
 		countOnce(state, block('a', full));
-		const line = assistantLine({ uuid: 'b', requestId: 'req_1' }) as Record<string, any>;
+		const line = assistantLine({ uuid: 'b', requestId: 'req_1' }) as TestLine;
 		line.message = { ...line.message, id: 'msg_1', model: 'claude-opus-5-5', usage: full, content: [{ type: 'tool_use', name: 'Bash' }] };
 		const second = countOnce(state, extractUsageMessage(line)!)!;
 		expect(second.toolNames).toEqual(['Bash']);
