@@ -43,6 +43,9 @@ import {
 import { chunk } from '../src/lib/importers/chunk';
 import {
 	extractUsageMessage,
+	countOnce,
+	newSessionDedup,
+	type SessionDedup,
 	newAccumulator,
 	accumulate,
 	dominantModel,
@@ -178,6 +181,8 @@ async function main() {
 		if (files.length === 0) continue;
 
 		const sessionAccs = new Map<string, SessionAccumulator>();
+		// Usage is counted once per API response and once per record uuid, per session (countOnce).
+		const sessionDedups = new Map<string, SessionDedup>();
 		const projectMessages: MessageInput[] = [];
 		let firstCwd: string | null = null;
 
@@ -190,10 +195,18 @@ async function main() {
 				} catch {
 					return; // torn line — JSONL files can be interrupted mid-write
 				}
-				const msg = extractUsageMessage(parsed);
-				if (!msg) return;
+				const extracted = extractUsageMessage(parsed);
+				if (!extracted) return;
 
-				if (!firstCwd && msg.cwd) firstCwd = msg.cwd;
+				if (!firstCwd && extracted.cwd) firstCwd = extracted.cwd;
+
+				let dedup = sessionDedups.get(extracted.sessionId);
+				if (!dedup) {
+					dedup = newSessionDedup();
+					sessionDedups.set(extracted.sessionId, dedup);
+				}
+				const msg = countOnce(dedup, extracted);
+				if (!msg) return; // the same record, already counted from another file of this session
 
 				let acc = sessionAccs.get(msg.sessionId);
 				if (!acc) {

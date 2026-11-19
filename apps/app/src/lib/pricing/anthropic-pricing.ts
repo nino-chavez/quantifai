@@ -20,15 +20,20 @@ export interface TokenUsage {
 	inputTokens: number;
 	outputTokens: number;
 	cacheReadTokens: number;
+	/** Every cache-write token, 5-minute and 1-hour together. */
 	cacheCreationTokens: number;
+	/** The 1-hour share of `cacheCreationTokens`, when the usage block reports it; the rest is priced as 5-minute writes. */
+	cacheCreation1hTokens?: number;
 }
 
 export interface PricingRates {
 	inputPer1M: number;
 	outputPer1M: number;
 	cacheReadPer1M: number;
-	/** 5-minute cache-write rate; the JSONL usage block does not split 5m from 1h writes here. */
+	/** 5-minute cache-write rate: 1.25x the input price. */
 	cacheCreationPer1M: number;
+	/** 1-hour cache-write rate: 2x the input price (pricing page, prompt caching multipliers). */
+	cacheCreation1hPer1M: number;
 }
 
 export interface PricingRow extends PricingRates {
@@ -42,12 +47,18 @@ export interface PricingRow extends PricingRates {
 	longPrompt?: { overPromptTokens: number; rates: PricingRates };
 }
 
+function rates(input: number, output: number, cacheRead: number, cacheCreation: number): PricingRates {
+	return { inputPer1M: input, outputPer1M: output, cacheReadPer1M: cacheRead, cacheCreationPer1M: cacheCreation, cacheCreation1hPer1M: input * 2 };
+}
+
 function row(match: string, input: number, output: number, cacheRead: number, cacheCreation: number): PricingRow {
-	return { match, inputPer1M: input, outputPer1M: output, cacheReadPer1M: cacheRead, cacheCreationPer1M: cacheCreation };
+	return { match, ...rates(input, output, cacheRead, cacheCreation) };
 }
 
 // List prices from platform.claude.com/docs/en/about-claude/pricing, read
-// 2026-10-07. Columns: input, output, cache read, 5m cache write.
+// 2026-10-07; Fable 5.2, Mythos 5.2 and the Sonnet 5.5 cache read re-read
+// 2026-11-19. Columns: input, output, cache read, 5m cache write. The 1-hour
+// cache-write rate is derived: twice the input price.
 //
 // Order matters: first match wins, so a version must come before any key it
 // contains ("opus-5-5" before "opus-5", "opus-4-5" before "opus-4"). The
@@ -55,6 +66,8 @@ function row(match: string, input: number, output: number, cacheRead: number, ca
 // (claude-3-opus, claude-3-5-haiku, claude-3-5-sonnet) at the legacy rates
 // this table carried before versioned rows existed.
 export const ANTHROPIC_PRICING_TABLE: PricingRow[] = [
+	row('fable-5-2', 8, 40, 0.2, 10),
+	row('mythos-5-2', 8, 40, 0.2, 10),
 	row('fable-5-1', 10, 50, 0.25, 12.5),
 	row('mythos-5-1', 10, 50, 0.25, 12.5),
 	row('fable-5', 10, 50, 1, 12.5),
@@ -66,15 +79,15 @@ export const ANTHROPIC_PRICING_TABLE: PricingRow[] = [
 	row('opus-4-6', 5, 25, 0.5, 6.25),
 	row('opus-4-5', 5, 25, 0.5, 6.25),
 	row('opus-4', 15, 75, 1.5, 18.75),
-	// The pricing page's caching section says 0.05x ($0.10) for a Sonnet 5.5
-	// cache read; its model table and the Sonnet 5.5 overview both say $0.20.
-	row('sonnet-5-5', 2, 10, 0.2, 2.5),
+	// The pricing page's model table and caching section both list $0.10 for a
+	// Sonnet 5.5 cache read (read 2026-11-19); on 2026-10-07 they disagreed.
+	row('sonnet-5-5', 2, 10, 0.1, 2.5),
 	row('sonnet-5', 2, 10, 0.2, 2.5),
 	{
 		...row('haiku-5-5', 0.1, 0.5, 0.01, 0.125),
 		longPrompt: {
 			overPromptTokens: 100_000,
-			rates: { inputPer1M: 0.5, outputPer1M: 2.5, cacheReadPer1M: 0.05, cacheCreationPer1M: 0.625 }
+			rates: rates(0.5, 2.5, 0.05, 0.625)
 		}
 	},
 	row('haiku-4-5', 1, 5, 0.1, 1.25),
@@ -103,11 +116,16 @@ export function estimateAnthropicCost(model: string, usage: TokenUsage): CostEst
 	const active =
 		tier.longPrompt && promptTokens > tier.longPrompt.overPromptTokens ? tier.longPrompt.rates : tier;
 
+	// The 1-hour share can never exceed the cache write it is part of.
+	const oneHour = Math.min(usage.cacheCreation1hTokens ?? 0, usage.cacheCreationTokens);
+	const fiveMinute = usage.cacheCreationTokens - oneHour;
+
 	const costUsd =
 		(usage.inputTokens / 1_000_000) * active.inputPer1M +
 		(usage.outputTokens / 1_000_000) * active.outputPer1M +
 		(usage.cacheReadTokens / 1_000_000) * active.cacheReadPer1M +
-		(usage.cacheCreationTokens / 1_000_000) * active.cacheCreationPer1M;
+		(fiveMinute / 1_000_000) * active.cacheCreationPer1M +
+		(oneHour / 1_000_000) * active.cacheCreation1hPer1M;
 
 	return {
 		costUsd,
