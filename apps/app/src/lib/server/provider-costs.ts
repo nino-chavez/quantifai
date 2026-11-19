@@ -9,7 +9,20 @@
 
 import type { D1Database } from '@cloudflare/workers-types';
 import { chunk } from '$lib/importers/chunk';
-import type { ProviderCostRow } from '$lib/providers/types';
+import type { ProviderCostRow, StoredCostRow } from '$lib/providers/types';
+
+/** Every row one provider already has — handed to its adapter before a sync (see `StoredCostRow`). */
+export async function storedProviderCosts(db: D1Database, provider: string): Promise<StoredCostRow[]> {
+	const { results } = await db
+		.prepare(
+			`SELECT date, workspace_or_key AS workspaceOrKey, amount_usd AS amountUsd
+			 FROM provider_costs
+			 WHERE provider = ?1`
+		)
+		.bind(provider)
+		.all<StoredCostRow>();
+	return results;
+}
 
 export async function upsertProviderCost(db: D1Database, row: ProviderCostRow): Promise<void> {
 	const now = new Date().toISOString();

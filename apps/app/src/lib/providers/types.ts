@@ -39,11 +39,19 @@ export interface ProviderCostRow {
 	raw: unknown;
 }
 
+/** A row this provider already has in `provider_costs`, as the orchestrator hands it back to the adapter before a fetch. Lets an adapter whose API shows only a recent window (OpenRouter's 30 days) account for days it stored earlier. */
+export interface StoredCostRow {
+	/** UTC calendar day, YYYY-MM-DD. */
+	date: string;
+	workspaceOrKey: string;
+	amountUsd: number;
+}
+
 export interface CostProvider {
 	/** Matches migrations/0004_provider_costs.sql `provider_costs.provider` and `provider_sync_state.provider`. */
 	readonly name: string;
 	/** Absent secret = provider not connected. Checked before every sync attempt — a disconnected provider is never treated as a failed one (DESIGN.md rule 7). */
 	isConnected(env: ProviderSyncEnv): boolean;
-	/** Fetch + normalize one window of daily-aggregate cost rows. Throws on transport/parse failure — the orchestrator isolates the error per-provider. */
-	fetchWindow(window: FetchWindow, env: ProviderSyncEnv): Promise<ProviderCostRow[]>;
+	/** Fetch + normalize one window of daily-aggregate cost rows. Throws on transport/parse failure — the orchestrator isolates the error per-provider. `stored` is every row this provider already has; adapters that don't need it ignore it. */
+	fetchWindow(window: FetchWindow, env: ProviderSyncEnv, stored?: StoredCostRow[]): Promise<ProviderCostRow[]>;
 }
