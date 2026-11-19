@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { extractUsageMessage, newAccumulator, accumulate, dominantModel } from './usage-record';
+import { extractUsageMessage, newAccumulator, accumulate, dominantModel, newSessionDedup, countOnce } from './usage-record';
 
 function assistantLine(overrides: Record<string, unknown> = {}) {
 	return {
@@ -106,5 +106,72 @@ describe('accumulate / dominantModel', () => {
 
 	it('returns "unknown" for an accumulator with no messages', () => {
 		expect(dominantModel(newAccumulator('empty'))).toBe('unknown');
+	});
+});
+
+describe('countOnce — usage counted once per API response', () => {
+	// Claude Code writes one API response as one record per content block. Each
+	// record has its own uuid, the same message.id and requestId, and a usage
+	// block: identical on every record, or (older versions) a partial output
+	// count on the earlier ones.
+	function block(uuid: string, usage: Record<string, unknown>, ids: { id?: string; requestId?: string } = { id: 'msg_1', requestId: 'req_1' }, model = 'claude-opus-5-5') {
+		const line = assistantLine({ uuid, ...(ids.requestId ? { requestId: ids.requestId } : {}) }) as Record<string, any>;
+		line.message = { ...line.message, model, usage, ...(ids.id ? { id: ids.id } : {}) };
+		return extractUsageMessage(line)!;
+	}
+	const full = { input_tokens: 2, output_tokens: 300, cache_read_input_tokens: 50_000, cache_creation_input_tokens: 2_000 };
+
+	it('keys a record by message.id and requestId, falling back to its uuid', () => {
+		expect(block('a', full).responseKey).toBe('msg_1|req_1');
+		expect(block('b', full, { id: 'msg_1' }).responseKey).toBe('uuid:b');
+		expect(block('c', full, { requestId: 'req_1' }).responseKey).toBe('uuid:c');
+	});
+
+	it('counts a response written as two records with identical usage once', () => {
+		const state = newSessionDedup();
+		const first = countOnce(state, block('a', full))!;
+		const second = countOnce(state, block('b', full))!;
+		expect([first.outputTokens, first.cacheReadTokens, first.cacheCreationTokens]).toEqual([300, 50_000, 2_000]);
+		expect([second.inputTokens, second.outputTokens, second.cacheReadTokens, second.cacheCreationTokens]).toEqual([0, 0, 0, 0]);
+		expect(second.costUsd).toBe(0);
+		expect(first.costUsd + second.costUsd).toBeCloseTo(block('x', full).costUsd, 12);
+	});
+
+	it('takes a partial output count on an earlier record up to the full count, once', () => {
+		const state = newSessionDedup();
+		const first = countOnce(state, block('a', { ...full, output_tokens: 1 }))!;
+		const second = countOnce(state, block('b', full))!;
+		expect([first.outputTokens, second.outputTokens]).toEqual([1, 299]);
+		expect(first.cacheReadTokens + second.cacheReadTokens).toBe(50_000);
+		expect(first.costUsd + second.costUsd).toBeCloseTo(block('x', full).costUsd, 12);
+	});
+
+	it('skips a record whose uuid was already counted in the session', () => {
+		const state = newSessionDedup();
+		expect(countOnce(state, block('a', full))).not.toBeNull();
+		expect(countOnce(state, block('a', full))).toBeNull();
+	});
+
+	it('counts records without a requestId as separate responses', () => {
+		const state = newSessionDedup();
+		const a = countOnce(state, block('a', full, { id: 'msg_1' }))!;
+		const b = countOnce(state, block('b', full, { id: 'msg_1' }))!;
+		expect([a.outputTokens, b.outputTokens]).toEqual([300, 300]);
+	});
+
+	it('keeps tool names on a record whose usage was already counted', () => {
+		const state = newSessionDedup();
+		countOnce(state, block('a', full));
+		const line = assistantLine({ uuid: 'b', requestId: 'req_1' }) as Record<string, any>;
+		line.message = { ...line.message, id: 'msg_1', model: 'claude-opus-5-5', usage: full, content: [{ type: 'tool_use', name: 'Bash' }] };
+		const second = countOnce(state, extractUsageMessage(line)!)!;
+		expect(second.toolNames).toEqual(['Bash']);
+		expect(second.outputTokens).toBe(0);
+	});
+
+	it('reads the 1-hour share of a cache write', () => {
+		const msg = block('a', { ...full, cache_creation: { ephemeral_5m_input_tokens: 500, ephemeral_1h_input_tokens: 1_500 } });
+		expect(msg.cacheCreation1hTokens).toBe(1_500);
+		expect(msg.costUsd).toBeCloseTo((2 * 4 + 300 * 20 + 50_000 * 0.2 + 500 * 5 + 1_500 * 8) / 1e6, 12);
 	});
 });

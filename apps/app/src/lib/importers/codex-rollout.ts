@@ -193,15 +193,19 @@ export function createCodexRolloutParser(options: CodexRolloutParserOptions = {}
 			inputTokens: c.usage.input_tokens - cached,
 			outputTokens: c.usage.output_tokens,
 			cacheReadTokens: cached,
-			cacheCreationTokens: c.usage.cache_write_input_tokens
+			cacheCreationTokens: c.usage.cache_write_input_tokens,
+			cacheCreation1hTokens: 0
 		};
 		const est = estimateOpenAICost(c.model, tokens);
 		if (!est.matched) unpricedTokens += c.usage.input_tokens + c.usage.output_tokens;
+		const messageId = useRecords && c.key.startsWith('resp_') ? c.key : `codex:${sid}:${fileKey}:${c.key}`;
 		return {
 			sessionId: sid,
 			// response ids are globally unique; running-total rows get a stable
 			// synthetic id from file + line (rollouts are append-only).
-			messageId: useRecords && c.key.startsWith('resp_') ? c.key : `codex:${sid}:${fileKey}:${c.key}`,
+			messageId,
+			// This importer already resolves repeated responses itself; each row is its own response.
+			responseKey: `uuid:${messageId}`,
 			timestamp: c.timestamp,
 			model: c.model,
 			cwd,

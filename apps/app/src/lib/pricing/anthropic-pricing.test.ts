@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { estimateAnthropicCost } from './anthropic-pricing';
+import { estimateAnthropicCost, type TokenUsage } from './anthropic-pricing';
 
 describe('estimateAnthropicCost', () => {
 	it('prices a sonnet session at published per-1M rates', () => {
@@ -136,5 +136,58 @@ describe('estimateAnthropicCost — versioned rows (pricing page read 2026-10-07
 		// One token over: every category, output included, moves to long-prompt rates.
 		expect(over.costUsd).toBeCloseTo((1_001 * 0.5 + 98_000 * 0.05 + 1_000 * 0.625) / 1e6 + 2.5, 9);
 		expect(over.matchedTier).toBe('haiku-5-5');
+	});
+});
+
+describe('estimateAnthropicCost — pricing page read 2026-11-19', () => {
+	const million = (over: Partial<TokenUsage>): TokenUsage => ({
+		inputTokens: 0,
+		outputTokens: 0,
+		cacheReadTokens: 0,
+		cacheCreationTokens: 0,
+		...over
+	});
+
+	it.each([
+		// Fable 5.2 and Mythos 5.2: $8 input, $40 output, $0.20 cache read, $10 5-minute write.
+		['claude-fable-5-2', 'fable-5-2'],
+		['claude-mythos-5-2', 'mythos-5-2']
+	])('%s has its own row instead of falling through to the 5.0 row', (model, tier) => {
+		expect(estimateAnthropicCost(model, million({ inputTokens: 1_000_000 }))).toMatchObject({ matchedTier: tier, costUsd: 8 });
+		expect(estimateAnthropicCost(model, million({ outputTokens: 1_000_000 })).costUsd).toBeCloseTo(40, 9);
+		expect(estimateAnthropicCost(model, million({ cacheReadTokens: 1_000_000 })).costUsd).toBeCloseTo(0.2, 9);
+		expect(estimateAnthropicCost(model, million({ cacheCreationTokens: 1_000_000 })).costUsd).toBeCloseTo(10, 9);
+	});
+
+	it('prices a Sonnet 5.5 cache read at $0.10 per million', () => {
+		expect(estimateAnthropicCost('claude-sonnet-5-5', million({ cacheReadTokens: 1_000_000 })).costUsd).toBeCloseTo(0.1, 9);
+	});
+
+	it.each([
+		// A 1-hour cache write is twice the base input price (pricing page, prompt caching multipliers).
+		['claude-fable-5-2', 16],
+		['claude-opus-5-5', 8],
+		['claude-sonnet-5-5', 4],
+		['claude-opus-4-6', 10],
+		['claude-sonnet-4-6', 6],
+		['claude-haiku-4-5', 2]
+	])('prices 1-hour cache writes for %s at $%s per million', (model, rate) => {
+		const r = estimateAnthropicCost(model, million({ cacheCreationTokens: 1_000_000, cacheCreation1hTokens: 1_000_000 }));
+		expect(r.costUsd).toBeCloseTo(rate, 9);
+	});
+
+	it('splits a mixed cache write into its 5-minute and 1-hour parts', () => {
+		const r = estimateAnthropicCost('claude-opus-5-5', million({ cacheCreationTokens: 1_000_000, cacheCreation1hTokens: 250_000 }));
+		expect(r.costUsd).toBeCloseTo(0.75 * 5 + 0.25 * 8, 9);
+	});
+
+	it('never prices more 1-hour tokens than the cache write holds', () => {
+		const r = estimateAnthropicCost('claude-opus-5-5', million({ cacheCreationTokens: 10, cacheCreation1hTokens: 25 }));
+		expect(r.costUsd).toBeCloseTo((10 * 8) / 1e6, 12);
+	});
+
+	it('moves Haiku 5.5 1-hour writes to the long-prompt rate over 100,000 prompt tokens', () => {
+		const r = estimateAnthropicCost('claude-haiku-5-5', million({ inputTokens: 1, cacheCreationTokens: 100_000, cacheCreation1hTokens: 100_000 }));
+		expect(r.costUsd).toBeCloseTo((1 * 0.5 + 100_000 * 1) / 1e6, 12);
 	});
 });

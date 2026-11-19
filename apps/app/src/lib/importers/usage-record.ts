@@ -16,10 +16,12 @@ interface RawAssistantRecord {
 	type?: string;
 	sessionId?: string;
 	uuid?: string;
+	requestId?: string;
 	timestamp?: string;
 	cwd?: string;
 	entrypoint?: string;
 	message?: {
+		id?: string;
 		model?: string;
 		content?: RawContentBlock[];
 		usage?: {
@@ -27,6 +29,10 @@ interface RawAssistantRecord {
 			output_tokens?: number;
 			cache_read_input_tokens?: number;
 			cache_creation_input_tokens?: number;
+			cache_creation?: {
+				ephemeral_5m_input_tokens?: number;
+				ephemeral_1h_input_tokens?: number;
+			};
 		};
 	};
 }
@@ -34,6 +40,12 @@ interface RawAssistantRecord {
 export interface UsageMessage {
 	sessionId: string;
 	messageId: string;
+	/**
+	 * The API response this record belongs to: `message.id|requestId`, or
+	 * `uuid:<uuid>` when either is missing. Claude Code writes one response as
+	 * one record per content block, all carrying the response's usage.
+	 */
+	responseKey: string;
 	timestamp: string;
 	model: string;
 	cwd: string | null;
@@ -42,6 +54,8 @@ export interface UsageMessage {
 	outputTokens: number;
 	cacheReadTokens: number;
 	cacheCreationTokens: number;
+	/** The 1-hour share of `cacheCreationTokens` (0 when the usage block has no breakdown). */
+	cacheCreation1hTokens: number;
 	costUsd: number;
 	toolNames: string[];
 }
@@ -71,17 +85,21 @@ export function extractUsageMessage(raw: unknown): UsageMessage | null {
 	const outputTokens = usage.output_tokens ?? 0;
 	const cacheReadTokens = usage.cache_read_input_tokens ?? 0;
 	const cacheCreationTokens = usage.cache_creation_input_tokens ?? 0;
+	const cacheCreation1hTokens = usage.cache_creation?.ephemeral_1h_input_tokens ?? 0;
 
 	const { costUsd } = estimateAnthropicCost(model, {
 		inputTokens,
 		outputTokens,
 		cacheReadTokens,
-		cacheCreationTokens
+		cacheCreationTokens,
+		cacheCreation1hTokens
 	});
 
+	const responseId = r.message?.id;
 	return {
 		sessionId: r.sessionId,
 		messageId: r.uuid,
+		responseKey: responseId && r.requestId ? `${responseId}|${r.requestId}` : `uuid:${r.uuid}`,
 		timestamp: r.timestamp,
 		model,
 		cwd: r.cwd ?? null,
@@ -90,8 +108,70 @@ export function extractUsageMessage(raw: unknown): UsageMessage | null {
 		outputTokens,
 		cacheReadTokens,
 		cacheCreationTokens,
+		cacheCreation1hTokens,
 		costUsd,
 		toolNames
+	};
+}
+
+/** One response's largest usage seen so far, field by field. */
+interface ResponseUsage {
+	inputTokens: number;
+	outputTokens: number;
+	cacheReadTokens: number;
+	cacheCreationTokens: number;
+	cacheCreation1hTokens: number;
+}
+
+/** What one session has already counted: record uuids, and each response's usage so far. */
+export interface SessionDedup {
+	seen: Set<string>;
+	responses: Map<string, ResponseUsage>;
+}
+
+export function newSessionDedup(): SessionDedup {
+	return { seen: new Set(), responses: new Map() };
+}
+
+/**
+ * Counts a session's usage once per API response. Feed it every record of one
+ * session in file walk order.
+ *
+ * - A record whose uuid was already counted (the same record copied into a
+ *   second file, such as the session's subagents folder) returns null.
+ * - Otherwise the record carries only the increase over the largest usage its
+ *   response has shown so far, field by field, and the cost of that increase.
+ *   A response's records then sum to its true usage, whether every record
+ *   repeats it or earlier records carry a partial output count.
+ *
+ * The record keeps its row, timestamp and tool names; only its usage changes.
+ * quantifai-sync's collector implements the same rule; the parity golden
+ * holds the two together.
+ */
+export function countOnce(state: SessionDedup, msg: UsageMessage): UsageMessage | null {
+	if (state.seen.has(msg.messageId)) return null;
+	state.seen.add(msg.messageId);
+
+	const prev = state.responses.get(msg.responseKey);
+	const next: ResponseUsage = {
+		inputTokens: Math.max(prev?.inputTokens ?? 0, msg.inputTokens),
+		outputTokens: Math.max(prev?.outputTokens ?? 0, msg.outputTokens),
+		cacheReadTokens: Math.max(prev?.cacheReadTokens ?? 0, msg.cacheReadTokens),
+		cacheCreationTokens: Math.max(prev?.cacheCreationTokens ?? 0, msg.cacheCreationTokens),
+		cacheCreation1hTokens: Math.max(prev?.cacheCreation1hTokens ?? 0, msg.cacheCreation1hTokens)
+	};
+	state.responses.set(msg.responseKey, next);
+	if (!prev) return msg;
+
+	const costUsd = estimateAnthropicCost(msg.model, next).costUsd - estimateAnthropicCost(msg.model, prev).costUsd;
+	return {
+		...msg,
+		inputTokens: next.inputTokens - prev.inputTokens,
+		outputTokens: next.outputTokens - prev.outputTokens,
+		cacheReadTokens: next.cacheReadTokens - prev.cacheReadTokens,
+		cacheCreationTokens: next.cacheCreationTokens - prev.cacheCreationTokens,
+		cacheCreation1hTokens: next.cacheCreation1hTokens - prev.cacheCreation1hTokens,
+		costUsd
 	};
 }
 
